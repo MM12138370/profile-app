@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "职面助手",
+    "slug": "zhimian-assistant",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "zhimian",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zhimian.assistant",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.zhimian.assistant",
+      "adaptiveIcon": {
+        "backgroundColor": "#F3F0EA",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "职面助手"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-file-system",
+        {
+          "enableFileSharing": true
+        }
+      ]
+    ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F3F0EA"
+    }
+  }
+}
