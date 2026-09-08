@@ -11,8 +11,12 @@ config.resolver.unstable_conditionNames = [
 ];
 
 const emptyShim = require.resolve('./src/shims/empty.js');
+const langsmithShim = require.resolve('./src/shims/langsmith.js');
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'langsmith' || moduleName.startsWith('langsmith/')) {
+    return { type: 'sourceFile', filePath: langsmithShim };
+  }
   if (
     moduleName === 'async_hooks' ||
     moduleName === 'node:async_hooks' ||
