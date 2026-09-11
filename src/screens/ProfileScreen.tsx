@@ -1,74 +1,142 @@
-import { Fragment, useCallback, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  useNavigation,
+  useRoute,
+  type NavigationAction,
+  type RouteProp,
+} from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '../auth/AuthContext';
+import type { RootStackParamList } from '../navigation/types';
+import { rememberDiscardDraft, rememberKeepDraft, shouldStartEmpty } from '../resumeDraft';
+import { GENDERS, INFO_FIELDS } from '../resumeFields';
 import { loadProfile, saveProfile } from '../storage';
-import { colors, space } from '../theme';
-import type { PersonalInfo, Profile } from '../types';
+import { colors, radius, space } from '../theme';
+import { emptyProfile, type PersonalInfo, type Profile } from '../types';
+import { Button } from '../ui/Button';
 import { Chip, ChipRow } from '../ui/Chips';
 import { Field } from '../ui/Fields';
 import { SectionTree } from '../ui/SectionTree';
 
-const GENDERS = ['男', '女', '不愿透露'];
-
-const INFO_FIELDS: Array<{ key: keyof PersonalInfo; label: string; placeholder: string; multiline?: boolean }> =
-  [
-    { key: 'name', label: '姓名', placeholder: '真实姓名' },
-    { key: 'birthDate', label: '出生年月', placeholder: '1998-07' },
-    { key: 'phone', label: '手机号', placeholder: '11 位手机号' },
-    { key: 'email', label: '邮箱', placeholder: 'name@example.com' },
-    { key: 'education', label: '学历信息', placeholder: '本科 / 硕士…' },
-    { key: 'jobIntention', label: '求职意向', placeholder: 'iOS 开发' },
-    { key: 'educationExperience', label: '教育经历', placeholder: '学校 · 专业 · 时间', multiline: true },
-    { key: 'yearsOfWork', label: '工作年限', placeholder: '3 年' },
-    { key: 'intendedCities', label: '意向城市', placeholder: '上海、杭州' },
-  ];
+type Nav = NativeStackNavigationProp<RootStackParamList, 'Profile'>;
+type R = RouteProp<RootStackParamList, 'Profile'>;
 
 export function ProfileScreen() {
   const { user } = useAuth();
+  const navigation = useNavigation<Nav>();
+  const intent = useRoute<R>().params?.intent ?? 'create';
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [savedAt, setSavedAt] = useState<string>('');
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [promptVisible, setPromptVisible] = useState(false);
   const profileRef = useRef<Profile | null>(null);
+  const allowLeave = useRef(false);
+  const pendingAction = useRef<NavigationAction | null>(null);
 
-  const persist = useCallback(
-    (next: Profile) => {
-      if (!user) {
+  const apply = useCallback((next: Profile) => {
+    profileRef.current = next;
+    setProfile(next);
+  }, []);
+
+  const openPrompt = useCallback((action?: NavigationAction) => {
+    pendingAction.current = action ?? null;
+    setPromptVisible(true);
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    const loaded =
+      intent === 'create' && shouldStartEmpty() ? emptyProfile() : loadProfile(user.hashid);
+    profileRef.current = loaded;
+    allowLeave.current = false;
+    setPromptVisible(false);
+    setProfile(loaded);
+  }, [intent, user]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      gestureEnabled: false,
+      headerBackVisible: false,
+      headerLeft: () => (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="返回"
+          hitSlop={12}
+          onPress={() => openPrompt()}
+          style={styles.backBtn}
+        >
+          <Ionicons name="chevron-back" size={28} color={colors.accent} />
+        </Pressable>
+      ),
+    });
+  }, [navigation, openPrompt]);
+
+  useEffect(() => {
+    const sub = navigation.addListener('beforeRemove', (e) => {
+      if (allowLeave.current) {
         return;
       }
-      profileRef.current = next;
-      setProfile(next);
-      if (timer.current) {
-        clearTimeout(timer.current);
-      }
-      timer.current = setTimeout(() => {
-        saveProfile(user.hashid, next);
-        setSavedAt('已自动保存');
-      }, 400);
-    },
-    [user],
-  );
+      e.preventDefault();
+      openPrompt(e.data.action);
+    });
+    return sub;
+  }, [navigation, openPrompt]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (user) {
-        const loaded = loadProfile(user.hashid);
-        profileRef.current = loaded;
-        setProfile(loaded);
-      }
-      return () => {
-        if (timer.current) {
-          clearTimeout(timer.current);
-          timer.current = null;
-        }
-        if (user && profileRef.current) {
-          saveProfile(user.hashid, profileRef.current);
-        }
-      };
-    }, [user]),
-  );
+  function closePrompt() {
+    pendingAction.current = null;
+    setPromptVisible(false);
+  }
+
+  function persistCurrent() {
+    if (user && profileRef.current) {
+      saveProfile(user.hashid, profileRef.current);
+    }
+    rememberKeepDraft();
+  }
+
+  function leave(save: boolean) {
+    if (save) {
+      persistCurrent();
+    } else {
+      rememberDiscardDraft();
+    }
+    allowLeave.current = true;
+    const action = pendingAction.current;
+    closePrompt();
+    if (action) {
+      navigation.dispatch(action);
+    } else {
+      navigation.goBack();
+    }
+  }
+
+  function patchInfo(patch: Partial<PersonalInfo>) {
+    if (!profile) {
+      return;
+    }
+    apply({
+      ...profile,
+      personalInfo: { ...profile.personalInfo, ...patch },
+    });
+  }
+
+  function onSave() {
+    persistCurrent();
+    allowLeave.current = true;
+    navigation.goBack();
+  }
 
   if (!profile || !user) {
     return null;
@@ -78,73 +146,85 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {savedAt ? <Text style={styles.saved}>{savedAt}</Text> : null}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.section}>个人信息</Text>
+          <View style={styles.block}>
+            {INFO_FIELDS.map((field) => (
+              <Fragment key={field.key}>
+                <Field
+                  label={field.label}
+                  value={info[field.key]}
+                  placeholder={field.placeholder}
+                  multiline={field.multiline}
+                  onChangeText={(value) => patchInfo({ [field.key]: value })}
+                />
+                {field.key === 'name' ? (
+                  <View style={styles.gender}>
+                    <Text style={styles.genderLabel}>性别</Text>
+                    <ChipRow>
+                      {GENDERS.map((g) => (
+                        <Chip
+                          key={g}
+                          label={g}
+                          active={info.gender === g}
+                          onPress={() => patchInfo({ gender: g })}
+                        />
+                      ))}
+                    </ChipRow>
+                  </View>
+                ) : null}
+              </Fragment>
+            ))}
+          </View>
 
-        <Text style={styles.section}>个人信息</Text>
-        <View style={styles.block}>
-          {INFO_FIELDS.map((field) => (
-            <Fragment key={field.key}>
-              <Field
-                label={field.label}
-                value={info[field.key]}
-                placeholder={field.placeholder}
-                multiline={field.multiline}
-                onChangeText={(value) =>
-                  persist({
-                    ...profile,
-                    personalInfo: { ...info, [field.key]: value },
-                  })
-                }
-              />
-              {field.key === 'name' ? (
-                <View style={styles.gender}>
-                  <Text style={styles.genderLabel}>性别</Text>
-                  <ChipRow>
-                    {GENDERS.map((g) => (
-                      <Chip
-                        key={g}
-                        label={g}
-                        active={info.gender === g}
-                        onPress={() =>
-                          persist({
-                            ...profile,
-                            personalInfo: { ...info, gender: g },
-                          })
-                        }
-                      />
-                    ))}
-                  </ChipRow>
-                </View>
-              ) : null}
-            </Fragment>
-          ))}
+          <Text style={styles.section}>简历板块</Text>
+          <SectionTree
+            nodes={profile.sections}
+            onChange={(sections) => apply({ ...profile, sections })}
+          />
+        </ScrollView>
+        <View style={styles.footer}>
+          <Button label="保存" onPress={onSave} />
         </View>
+      </KeyboardAvoidingView>
 
-        <Text style={styles.section}>简历板块</Text>
-        <SectionTree
-          nodes={profile.sections}
-          onChange={(sections) => persist({ ...profile, sections })}
-        />
-      </ScrollView>
+      {promptVisible ? (
+        <View style={styles.overlay} pointerEvents="box-none">
+          <Pressable style={styles.mask} onPress={closePrompt} />
+          <View style={styles.dialog}>
+            <Text style={styles.dialogTitle}>保存草稿？</Text>
+            <Text style={styles.dialogBody}>
+              保存后，下次点加号会看到这次的内容。不保存只丢掉这次填写，已保存的简历还在。
+            </Text>
+            <Button label="保存草稿" onPress={() => leave(true)} />
+            <Button variant="danger" label="不保存" onPress={() => leave(false)} />
+            <Button variant="ghost" label="继续编辑" onPress={closePrompt} />
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  backBtn: {
+    marginLeft: Platform.OS === 'ios' ? 0 : -4,
+    paddingRight: 8,
+    justifyContent: 'center',
+  },
   content: {
     padding: space.lg,
     gap: space.md,
-    paddingBottom: 48,
-  },
-  saved: {
-    color: colors.good,
-    fontSize: 12,
-    fontWeight: '600',
+    paddingBottom: space.lg,
   },
   section: {
     marginTop: space.sm,
@@ -162,5 +242,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
     fontWeight: '600',
+  },
+  footer: {
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    elevation: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: space.lg,
+  },
+  mask: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(26, 23, 20, 0.45)',
+  },
+  dialog: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: colors.paper,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    gap: space.sm,
+    zIndex: 51,
+    elevation: 51,
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  dialogBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.muted,
+    marginBottom: space.xs,
   },
 });

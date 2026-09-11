@@ -13,6 +13,7 @@ import { JobsScreen } from '../screens/JobsScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ResumeCenterScreen } from '../screens/ResumeCenterScreen';
+import { ResumePreviewScreen } from '../screens/ResumePreviewScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { colors } from '../theme';
@@ -114,7 +115,16 @@ export function RootNavigator() {
               component={MainTabs}
               options={{ headerShown: false, animation: 'fade' }}
             />
-            <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: '简历' }} />
+            <Stack.Screen
+              name="Profile"
+              component={ProfileScreen}
+              options={{ title: '简历', gestureEnabled: false }}
+            />
+            <Stack.Screen
+              name="ResumePreview"
+              component={ResumePreviewScreen}
+              options={{ title: '简历预览' }}
+            />
             <Stack.Screen name="JobNew" component={JobNewScreen} options={{ title: '导入岗位' }} />
             <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ title: '岗位' }} />
             <Stack.Screen

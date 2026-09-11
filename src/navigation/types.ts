@@ -2,7 +2,8 @@ export type RootStackParamList = {
   Login: undefined;
   Welcome: undefined;
   Main: undefined;
-  Profile: undefined;
+  Profile: { intent?: 'create' | 'edit' };
+  ResumePreview: undefined;
   JobNew: undefined;
   JobDetail: { jobId: string };
   InterviewSession: { jobId: string };

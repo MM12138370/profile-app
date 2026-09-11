@@ -136,6 +136,10 @@ export function saveProfile(hashid: string, profile: Profile): void {
   writeJsonFile(profilePath(hashid), profile);
 }
 
+export function clearProfile(hashid: string): void {
+  saveProfile(hashid, emptyProfile());
+}
+
 export function listJobs(hashid: string): Job[] {
   ensureUserWorkspace(hashid);
   const dir = jobsDirPath(hashid);

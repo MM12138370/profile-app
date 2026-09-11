@@ -64,11 +64,11 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 48,
-    borderRadius: radius.md,
+    minHeight: 40,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: space.lg,
+    paddingHorizontal: space.md,
   },
   primary: {
     backgroundColor: colors.accent,
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
   label: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   primaryLabel: {

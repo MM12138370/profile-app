@@ -7,15 +7,17 @@ export function ListRow({
   title,
   subtitle,
   onPress,
+  flush,
 }: {
   title: string;
   subtitle?: string;
   onPress: () => void;
+  flush?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.row, flush && styles.flush, pressed && styles.pressed]}
     >
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>
@@ -45,6 +47,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
+  },
+  flush: {
+    marginHorizontal: 0,
+    marginBottom: 0,
+    borderRadius: 0,
+    borderWidth: 0,
   },
   pressed: {
     opacity: 0.82,

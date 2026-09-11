@@ -59,5 +59,5 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   body: { flex: 1, padding: space.lg },
   area: { flex: 1, minHeight: 280 },
-  footer: { padding: space.lg },
+  footer: { paddingHorizontal: space.lg, paddingVertical: space.md },
 });
