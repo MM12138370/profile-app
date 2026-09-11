@@ -1,25 +1,15 @@
-import { Ionicons } from '@expo/vector-icons';
-import type { CompositeNavigationProp } from '@react-navigation/native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Fragment, useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '../auth/AuthContext';
-import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { loadProfile, saveProfile } from '../storage';
 import { colors, space } from '../theme';
 import type { PersonalInfo, Profile } from '../types';
 import { Chip, ChipRow } from '../ui/Chips';
 import { Field } from '../ui/Fields';
 import { SectionTree } from '../ui/SectionTree';
-
-type Nav = CompositeNavigationProp<
-  BottomTabNavigationProp<MainTabParamList, 'ProfileTab'>,
-  NativeStackNavigationProp<RootStackParamList>
->;
 
 const GENDERS = ['男', '女', '不愿透露'];
 
@@ -38,7 +28,6 @@ const INFO_FIELDS: Array<{ key: keyof PersonalInfo; label: string; placeholder: 
 
 export function ProfileScreen() {
   const { user } = useAuth();
-  const navigation = useNavigation<Nav>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [savedAt, setSavedAt] = useState<string>('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -93,13 +82,6 @@ export function ProfileScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.top}>
-          <Text style={styles.hello}>你好，{info.name || user.username}</Text>
-          <Pressable onPress={() => navigation.navigate('Settings')} hitSlop={8}>
-            <Ionicons name="settings-outline" size={22} color={colors.accent} />
-          </Pressable>
-        </View>
-        <Text style={styles.sub}>个人信息与板块都会写进本地 profile.json。板块可以嵌套，方便和工作经历、项目经历、技能对齐。</Text>
         {savedAt ? <Text style={styles.saved}>{savedAt}</Text> : null}
 
         <Text style={styles.section}>个人信息</Text>
@@ -143,7 +125,6 @@ export function ProfileScreen() {
         </View>
 
         <Text style={styles.section}>简历板块</Text>
-        <Text style={styles.sub}>条目是标题 + 内容；分组是同构子数组。从求职中心导入的相关项目会追加到这里。</Text>
         <SectionTree
           nodes={profile.sections}
           onChange={(sections) => persist({ ...profile, sections })}
@@ -159,23 +140,6 @@ const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.md,
     paddingBottom: 48,
-  },
-  top: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: space.md,
-  },
-  hello: {
-    flex: 1,
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.ink,
-  },
-  sub: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
   },
   saved: {
     color: colors.good,

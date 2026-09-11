@@ -1,10 +1,10 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph/web';
 
 import type { Profile, SectionNode, StructuredJD } from '../../types';
-import { sanitizeSections } from '../../types';
+import { profileHasContent, sanitizeSections } from '../../types';
 import { extractJson, GROUNDING_RULE } from '../json';
 import { complete } from '../llm';
-import { hasProfileSubstance, profileToPrompt } from '../profileText';
+import { profileToPrompt } from '../profileText';
 
 const State = Annotation.Root({
   jd: Annotation<StructuredJD>,
@@ -19,7 +19,7 @@ type StateType = {
 };
 
 async function draft(state: StateType) {
-  if (!hasProfileSubstance(state.profile)) {
+  if (!profileHasContent(state.profile)) {
     return { projects: [] as SectionNode[] };
   }
   const content = await complete([

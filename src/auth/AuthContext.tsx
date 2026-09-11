@@ -8,20 +8,21 @@ import {
   type ReactNode,
 } from 'react';
 
-import { loginOrRegister, logout as persistLogout, restoreSession } from '../storage';
-import type { SessionUser } from '../types';
+import { loginOrRegister, logout as persistLogout, restoreSession, saveNickname } from '../storage';
+import type { UserRecord } from '../types';
 
 type AuthContextValue = {
-  user: SessionUser | null;
+  user: UserRecord | null;
   ready: boolean;
-  login: (username: string) => Promise<void>;
+  login: (username: string, nickname?: string) => Promise<void>;
+  updateNickname: (nickname: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<SessionUser | null>(null);
+  const [user, setUser] = useState<UserRecord | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -30,10 +31,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setReady(true));
   }, []);
 
-  const login = useCallback(async (username: string) => {
-    const record = await loginOrRegister(username);
+  const login = useCallback(async (username: string, nickname?: string) => {
+    const record = await loginOrRegister(username, nickname);
     setUser(record);
   }, []);
+
+  const updateNickname = useCallback(async (nickname: string) => {
+    if (!user) {
+      return;
+    }
+    setUser(saveNickname(user.username, nickname));
+  }, [user]);
 
   const logout = useCallback(async () => {
     await persistLogout();
@@ -41,8 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, ready, login, logout }),
-    [user, ready, login, logout],
+    () => ({ user, ready, login, updateNickname, logout }),
+    [user, ready, login, updateNickname, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

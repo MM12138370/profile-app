@@ -33,14 +33,3 @@ export function renderSections(nodes: SectionNode[], depth = 0): string {
     .join('\n');
 }
 
-export function hasProfileSubstance(profile: Profile): boolean {
-  const p = profile.personalInfo;
-  const infoFilled = [
-    p.name,
-    p.education,
-    p.jobIntention,
-    p.educationExperience,
-    p.yearsOfWork,
-  ].some((v) => v.trim().length > 0);
-  return infoFilled || profile.sections.length > 0;
-}

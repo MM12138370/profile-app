@@ -52,7 +52,10 @@ export async function createHashId(username: string): Promise<string> {
   return digest.slice(0, 16);
 }
 
-export async function loginOrRegister(username: string): Promise<UserRecord> {
+export async function loginOrRegister(
+  username: string,
+  nickname?: string,
+): Promise<UserRecord> {
   await ensureStorage();
   const trimmed = username.trim();
   if (!trimmed) {
@@ -65,11 +68,30 @@ export async function loginOrRegister(username: string): Promise<UserRecord> {
     await kvSet(SESSION_KEY, existing.username);
     return existing;
   }
+  const nick = nickname?.trim();
   const hashid = await createHashId(trimmed);
-  const record: UserRecord = { hashid, username: trimmed };
+  const record: UserRecord = nick
+    ? { hashid, username: trimmed, nickname: nick }
+    : { hashid, username: trimmed };
   writeJsonFile(usersPath(), [...users, record]);
   ensureUserWorkspace(hashid);
   await kvSet(SESSION_KEY, record.username);
+  return record;
+}
+
+export function saveNickname(username: string, nickname: string): UserRecord {
+  const users = listUsers();
+  const index = users.findIndex((u) => u.username === username);
+  if (index < 0) {
+    throw new Error('用户不存在');
+  }
+  const nick = nickname.trim();
+  const current = users[index];
+  const record: UserRecord = nick
+    ? { ...current, nickname: nick }
+    : { hashid: current.hashid, username: current.username };
+  users[index] = record;
+  writeJsonFile(usersPath(), users);
   return record;
 }
 

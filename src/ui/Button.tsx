@@ -1,10 +1,8 @@
-import { type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
-  View,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
@@ -64,24 +62,6 @@ export function Button({
   );
 }
 
-export function IconButton({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress?: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} hitSlop={8} style={({ pressed }) => pressed && styles.pressed}>
-      <Text style={styles.icon}>{label}</Text>
-    </Pressable>
-  );
-}
-
-export function Row({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[styles.row, style]}>{children}</View>;
-}
-
 const styles = StyleSheet.create({
   base: {
     minHeight: 48,
@@ -117,14 +97,5 @@ const styles = StyleSheet.create({
   },
   dangerLabel: {
     color: '#fff',
-  },
-  icon: {
-    fontSize: 17,
-    color: colors.accent,
-    fontWeight: '600',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: space.sm,
   },
 });

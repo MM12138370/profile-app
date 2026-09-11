@@ -23,7 +23,7 @@ export function JobNewScreen() {
       return;
     }
     if (!rawJD.trim()) {
-      Alert.alert('请粘贴 JD');
+      Alert.alert('请粘贴链接或 JD');
       return;
     }
     const job = createJob(user.hashid, rawJD);
@@ -38,16 +38,16 @@ export function JobNewScreen() {
       >
         <View style={styles.body}>
           <Field
-            label="岗位 JD"
+            label="粘贴链接"
             value={rawJD}
             onChangeText={setRawJD}
-            placeholder="把职位描述整段粘贴在这里"
+            placeholder="先粘贴岗位链接；解析失败可改贴 JD 正文"
             multiline
             style={styles.area}
           />
         </View>
         <View style={styles.footer}>
-          <Button label="创建岗位" onPress={onCreate} />
+          <Button label="导入" onPress={onCreate} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

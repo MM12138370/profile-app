@@ -1,6 +1,7 @@
 export type UserRecord = {
   hashid: string;
   username: string;
+  nickname?: string;
 };
 
 export type PersonalInfo = {
@@ -60,11 +61,6 @@ export type Job = {
   updatedAt: string;
 };
 
-export type SessionUser = {
-  hashid: string;
-  username: string;
-};
-
 export type AiSettings = {
   baseURL: string;
   apiKey: string;
@@ -109,4 +105,23 @@ export function sanitizeSections(value: unknown): SectionNode[] {
     return [];
   }
   return value.filter(isSectionNode);
+}
+
+export function profileHasContent(profile: Profile): boolean {
+  if (profile.sections.length > 0) {
+    return true;
+  }
+  return Object.values(profile.personalInfo).some((value) => value.trim().length > 0);
+}
+
+export function userLabel(user: Pick<UserRecord, 'username' | 'nickname'>): string {
+  const nick = user.nickname?.trim();
+  if (nick) {
+    return nick;
+  }
+  const id = user.username.trim();
+  if (/^\d+$/.test(id) && id.length >= 4) {
+    return id.slice(-4);
+  }
+  return id;
 }

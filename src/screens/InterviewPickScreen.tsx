@@ -3,15 +3,15 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, ScrollView, StyleSheet } from 'react-native';
 
 import { useAuth } from '../auth/AuthContext';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { listJobs } from '../storage';
-import { colors, radius, space } from '../theme';
 import type { Job } from '../types';
-import { EmptyState } from '../ui/EmptyState';
+import { AppShell } from '../ui/AppShell';
+import { GiantAction } from '../ui/GiantAction';
+import { ListRow } from '../ui/ListRow';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'InterviewTab'>,
@@ -31,49 +31,40 @@ export function InterviewPickScreen() {
     }, [user]),
   );
 
+  function onPickEmpty() {
+    Alert.alert('还没有岗位', '去岗位列表导入', [
+      { text: '取消', style: 'cancel' },
+      { text: '去导入', onPress: () => navigation.navigate('JobsTab') },
+    ]);
+  }
+
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>面试助手</Text>
-        <Text style={styles.sub}>
-          选一个已经结构化过的岗位，按真实简历模拟面试官。结束后会把问题、参考答案、你的回答交给复盘工作流。
-        </Text>
-        {jobs.length === 0 ? (
-          <EmptyState title="还没有可面试的岗位" hint="先去求职中心粘贴 JD 并完成结构化。" />
-        ) : (
-          jobs.map((job) => (
-            <Pressable
+    <AppShell>
+      {jobs.length === 0 ? (
+        <GiantAction label="选择岗位模拟面试" onPress={onPickEmpty} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.list}>
+          {jobs.map((job) => (
+            <ListRow
               key={job.id}
-              style={styles.card}
-              onPress={() => navigation.navigate('InterviewSession', { jobId: job.id })}
-            >
-              <Text style={styles.job}>{job.structured?.jobTitle}</Text>
-              <Text style={styles.meta}>
-                {job.interviewResult?.score !== undefined
+              title={job.structured?.jobTitle || '岗位'}
+              subtitle={
+                job.interviewResult?.score !== undefined
                   ? `上次 ${job.interviewResult.score} 分 · 匹配度 ${job.interviewResult.matchScore}/10`
-                  : '还没有面试记录'}
-              </Text>
-            </Pressable>
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
+                  : '还没有面试记录'
+              }
+              onPress={() => navigation.navigate('InterviewSession', { jobId: job.id })}
+            />
+          ))}
+        </ScrollView>
+      )}
+    </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: space.lg, gap: space.md, paddingBottom: 48 },
-  title: { fontSize: 28, fontWeight: '800', color: colors.ink },
-  sub: { color: colors.muted, fontSize: 14, lineHeight: 20 },
-  card: {
-    backgroundColor: colors.paper,
-    borderRadius: radius.md,
-    padding: space.md,
-    gap: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
+  list: {
+    paddingTop: 4,
+    paddingBottom: 48,
   },
-  job: { fontSize: 18, fontWeight: '700', color: colors.ink },
-  meta: { color: colors.muted, fontSize: 14 },
 });

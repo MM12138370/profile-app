@@ -20,7 +20,7 @@ export const space = {
   xs: 6,
   sm: 10,
   md: 16,
-  lg: 24,
+  lg: 20,
   xl: 32,
 };
 
@@ -29,4 +29,28 @@ export const radius = {
   md: 14,
   lg: 20,
   pill: 999,
+};
+
+export const type = {
+  welcome: {
+    fontSize: 32,
+    fontWeight: '700' as const,
+    letterSpacing: 0.3,
+    color: colors.ink,
+  },
+  quote: {
+    fontSize: 16,
+    lineHeight: 26,
+    color: colors.muted,
+  },
+  rowTitle: {
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: colors.ink,
+  },
+  meta: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.muted,
+  },
 };

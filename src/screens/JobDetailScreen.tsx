@@ -10,7 +10,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { deleteJob, loadJob, loadProfile, saveJob, saveProfile } from '../storage';
 import { colors, radius, space } from '../theme';
 import type { Job, QAItem } from '../types';
-import { Button, Row } from '../ui/Button';
+import { Button } from '../ui/Button';
 import { BusyOverlay } from '../ui/BusyOverlay';
 import { EmptyState } from '../ui/EmptyState';
 import { SectionTree } from '../ui/SectionTree';
@@ -218,13 +218,11 @@ export function JobDetailScreen() {
               {job.interviewResult.score} 分 · 匹配度 {job.interviewResult.matchScore}/10
             </Text>
             <Text style={styles.body}>{job.interviewResult.optimizationPoints}</Text>
-            <Row>
-              <Button
-                variant="ghost"
-                label="再面一次"
-                onPress={() => navigation.navigate('InterviewSession', { jobId: job.id })}
-              />
-            </Row>
+            <Button
+              variant="ghost"
+              label="再面一次"
+              onPress={() => navigation.navigate('InterviewSession', { jobId: job.id })}
+            />
           </View>
         ) : (
           <Button

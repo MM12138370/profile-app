@@ -18,6 +18,7 @@ import { Field } from '../ui/Fields';
 export function LoginScreen() {
   const { login } = useAuth();
   const [username, setUsername] = useState('');
+  const [nickname, setNickname] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const known = useMemo(() => listUsers().map((u) => u.username), []);
@@ -29,7 +30,7 @@ export function LoginScreen() {
     setError('');
     setBusy(true);
     try {
-      await login(username);
+      await login(username, exists ? undefined : nickname);
     } catch (e) {
       setError(e instanceof Error ? e.message : '登录失败');
     } finally {
@@ -44,35 +45,53 @@ export function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.hero}>
-          <Text style={styles.kicker}>本地求职工作台</Text>
           <Text style={styles.title}>职面助手</Text>
-          <Text style={styles.lead}>
-            简历、岗位 JD、模拟面试都保存在这台 iPhone 上。输入用户名即可进入，没有账号会自动创建。
-          </Text>
+          <Text style={styles.lead}>把简历改清楚，对照岗位看匹配。</Text>
         </View>
         <View style={styles.card}>
           <Field
-            label="用户名"
+            label="账号"
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="例如：mie"
-            returnKeyType="done"
-            onSubmitEditing={() => void onEnter()}
+            placeholder="用户名"
+            returnKeyType={exists ? 'done' : 'next'}
+            onSubmitEditing={() => {
+              if (exists) {
+                void onEnter();
+              }
+            }}
           />
+          {!exists && trimmed ? (
+            <Field
+              label="昵称"
+              value={nickname}
+              onChangeText={setNickname}
+              placeholder="怎么称呼你（可选）"
+              returnKeyType="done"
+              onSubmitEditing={() => void onEnter()}
+            />
+          ) : null}
           {trimmed ? (
             <Text style={styles.hint}>{exists ? '进入已有档案' : '将创建新档案'}</Text>
           ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button label="进入" loading={busy} onPress={() => void onEnter()} />
+          <Button label={exists ? '进入' : '注册'} loading={busy} onPress={() => void onEnter()} />
         </View>
         {known.length > 0 ? (
           <View style={styles.known}>
             <Text style={styles.knownLabel}>本机已有</Text>
             <View style={styles.knownRow}>
               {known.map((name) => (
-                <Pressable key={name} onPress={() => setUsername(name)} style={styles.pill}>
+                <Pressable
+                  key={name}
+                  onPress={() => {
+                    setUsername(name);
+                    setNickname('');
+                  }}
+                  style={styles.pill}
+                >
                   <Text style={styles.pillText}>{name}</Text>
                 </Pressable>
               ))}
@@ -98,14 +117,8 @@ const styles = StyleSheet.create({
   hero: {
     gap: space.sm,
   },
-  kicker: {
-    color: colors.accent,
-    fontWeight: '700',
-    letterSpacing: 1,
-    fontSize: 13,
-  },
   title: {
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: '800',
     color: colors.ink,
   },

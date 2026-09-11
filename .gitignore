@@ -43,3 +43,6 @@ yarn-error.*
 .tmp-export/
 .tmp-export-web/
 .tmp-export-android/
+.tmp/
+datas/**
+!datas/.gitkeep

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '../auth/AuthContext';
@@ -10,12 +10,22 @@ import { Button } from '../ui/Button';
 import { Field } from '../ui/Fields';
 
 export function SettingsScreen() {
-  const { user, logout } = useAuth();
+  const { user, updateNickname, logout } = useAuth();
+  const [nickname, setNickname] = useState(user?.nickname ?? '');
   const [settings, setSettings] = useState<AiSettings | null>(null);
+
+  useEffect(() => {
+    setNickname(user?.nickname ?? '');
+  }, [user?.nickname]);
 
   useEffect(() => {
     void loadAiSettings().then(setSettings);
   }, []);
+
+  async function saveNick() {
+    await updateNickname(nickname);
+    Alert.alert('已保存', '下次欢迎页会用这个称呼。');
+  }
 
   async function save() {
     if (!settings) {
@@ -30,48 +40,54 @@ export function SettingsScreen() {
     Alert.alert('已保存', '模型调用走本机直连，兼容 OpenAI 接口。');
   }
 
-  if (!settings) {
-    return null;
-  }
-
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.lead}>
-          没有服务端。LangGraph 工作流在 App 内运行，LLM 用你配置的 OpenAI 兼容接口。Windows 浏览器预览把档案存在本机 localStorage；iOS / Android 写入沙盒文件。
-        </Text>
         <Field
-          label="API Base URL"
-          value={settings.baseURL}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="https://api.openai.com/v1"
-          onChangeText={(baseURL) => setSettings({ ...settings, baseURL })}
+          label="修改昵称"
+          value={nickname}
+          placeholder="怎么称呼你"
+          onChangeText={setNickname}
         />
-        <Field
-          label="API Key"
-          value={settings.apiKey}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
-          placeholder="sk-..."
-          onChangeText={(apiKey) => setSettings({ ...settings, apiKey })}
-        />
-        <Field
-          label="模型"
-          value={settings.model}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="gpt-4o-mini"
-          onChangeText={(model) => setSettings({ ...settings, model })}
-        />
-        <Text style={styles.hint}>
-          DeepSeek 可把 Base URL 设为 https://api.deepseek.com/v1，模型填 deepseek-chat。
-        </Text>
-        <Button label="保存模型设置" onPress={() => void save()} />
+        <Button label="保存" onPress={() => void saveNick()} />
         <View style={styles.gap} />
-        <Text style={styles.meta}>当前用户 {user?.username}</Text>
-        <Button variant="danger" label="退出登录" onPress={() => void logout()} />
+        <Pressable onPress={() => void logout()} style={({ pressed }) => [pressed && styles.pressed]}>
+          <Text style={styles.logout}>退出登录</Text>
+        </Pressable>
+
+        {settings ? (
+          <>
+            <Text style={styles.section}>模型接口</Text>
+            <Text style={styles.hint}>本机直连 OpenAI 兼容接口，仅本机保存。</Text>
+            <Field
+              label="API Base URL"
+              value={settings.baseURL}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="https://api.openai.com/v1"
+              onChangeText={(baseURL) => setSettings({ ...settings, baseURL })}
+            />
+            <Field
+              label="API Key"
+              value={settings.apiKey}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              placeholder="sk-..."
+              onChangeText={(apiKey) => setSettings({ ...settings, apiKey })}
+            />
+            <Field
+              label="模型"
+              value={settings.model}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="gpt-4o-mini"
+              onChangeText={(model) => setSettings({ ...settings, model })}
+            />
+            <Button variant="ghost" label="保存模型设置" onPress={() => void save()} />
+          </>
+        ) : null}
+        <Text style={styles.meta}>当前账号 {user?.username}</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -80,8 +96,22 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { padding: space.lg, gap: space.md },
-  lead: { fontSize: 15, lineHeight: 22, color: colors.muted },
+  gap: { height: 8 },
+  pressed: { opacity: 0.7 },
+  logout: {
+    color: colors.danger,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingVertical: 14,
+  },
+  section: {
+    marginTop: space.lg,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.faint,
+    letterSpacing: 0.6,
+  },
   hint: { fontSize: 13, lineHeight: 18, color: colors.muted },
-  gap: { height: 12 },
   meta: { color: colors.faint, fontSize: 13 },
 });
