@@ -1,10 +1,19 @@
 import * as Crypto from 'expo-crypto';
 
 import {
-  emptyProfile,
+  composeProfile,
+  emptyMaster,
+  emptyResume,
+  hydrateProjectAssist,
+  hydrateQAItems,
+  masterHasContent,
+  normalizeStructuredJd,
   type AiSettings,
   type Job,
+  type MasterTemplate,
   type Profile,
+  type Resume,
+  type StructuredJD,
   type UserRecord,
 } from '../types';
 import {
@@ -14,10 +23,12 @@ import {
   jobPath,
   jobsDirPath,
   listFileNames,
+  masterPath,
   nowIso,
   pathExists,
-  profilePath,
   readJsonFile,
+  resumePath,
+  resumesDirPath,
   userDirPath,
   usersPath,
   writeJsonFile,
@@ -98,9 +109,7 @@ export function saveNickname(username: string, nickname: string): UserRecord {
 export function ensureUserWorkspace(hashid: string): void {
   ensureDir(userDirPath(hashid));
   ensureDir(jobsDirPath(hashid));
-  if (!pathExists(profilePath(hashid))) {
-    writeJsonFile(profilePath(hashid), emptyProfile());
-  }
+  ensureDir(resumesDirPath(hashid));
 }
 
 export async function restoreSession(): Promise<UserRecord | null> {
@@ -122,22 +131,99 @@ export async function logout(): Promise<void> {
   await kvRemove(SESSION_KEY);
 }
 
-export function loadProfile(hashid: string): Profile {
+export function loadMaster(hashid: string): MasterTemplate {
   ensureUserWorkspace(hashid);
-  const stored = readJsonFile<Partial<Profile>>(profilePath(hashid), emptyProfile());
-  const base = emptyProfile();
-  return {
-    personalInfo: { ...base.personalInfo, ...stored.personalInfo },
-    sections: Array.isArray(stored.sections) ? stored.sections : [],
+  if (!pathExists(masterPath(hashid))) {
+    return emptyMaster();
+  }
+  return readJsonFile<MasterTemplate>(masterPath(hashid), emptyMaster());
+}
+
+export function saveMaster(hashid: string, master: MasterTemplate): void {
+  if (!masterHasContent(master)) {
+    deleteFile(masterPath(hashid));
+    return;
+  }
+  writeJsonFile(masterPath(hashid), master);
+}
+
+export function listResumes(hashid: string): Resume[] {
+  ensureUserWorkspace(hashid);
+  const dir = resumesDirPath(hashid);
+  if (!pathExists(dir)) {
+    return [];
+  }
+  const resumes: Resume[] = [];
+  for (const name of listFileNames(dir)) {
+    if (!name.endsWith('.json')) {
+      continue;
+    }
+    const id = name.replace(/\.json$/, '');
+    resumes.push(readJsonFile<Resume>(resumePath(hashid, id), emptyResume(id)));
+  }
+  return resumes.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export function resumeExists(hashid: string, resumeId: string): boolean {
+  return pathExists(resumePath(hashid, resumeId));
+}
+
+export function loadResume(hashid: string, resumeId: string): Resume {
+  return readJsonFile<Resume>(resumePath(hashid, resumeId), emptyResume(resumeId));
+}
+
+export function saveResume(hashid: string, resume: Resume): Resume {
+  const next = { ...resume, updatedAt: nowIso() };
+  writeJsonFile(resumePath(hashid, resume.id), next);
+  return next;
+}
+
+export function createResume(
+  hashid: string,
+  draft: Omit<Resume, 'id' | 'createdAt' | 'updatedAt'>,
+): Resume {
+  const id = `resume_${Date.now().toString(36)}`;
+  const now = nowIso();
+  const resume: Resume = {
+    ...draft,
+    id,
+    createdAt: now,
+    updatedAt: now,
   };
+  writeJsonFile(resumePath(hashid, id), resume);
+  return resume;
 }
 
-export function saveProfile(hashid: string, profile: Profile): void {
-  writeJsonFile(profilePath(hashid), profile);
+export function persistResume(hashid: string, resume: Resume): Resume {
+  if (!resume.id) {
+    return createResume(hashid, {
+      title: resume.title,
+      jobIntention: resume.jobIntention,
+      yearsOfWork: resume.yearsOfWork,
+      intendedCities: resume.intendedCities,
+      sections: resume.sections,
+    });
+  }
+  return saveResume(hashid, resume);
 }
 
-export function clearProfile(hashid: string): void {
-  saveProfile(hashid, emptyProfile());
+export function deleteResume(hashid: string, resumeId: string): void {
+  deleteFile(resumePath(hashid, resumeId));
+  for (const job of listJobs(hashid)) {
+    if (job.resumeId === resumeId) {
+      saveJob(hashid, { ...job, resumeId: '' });
+    }
+  }
+}
+
+export function loadComposedProfile(hashid: string, resumeId: string): Profile {
+  return composeProfile(loadMaster(hashid), loadResume(hashid, resumeId));
+}
+
+export function loadProfileForJob(hashid: string, job: Job): Profile {
+  return job.resumeId && resumeExists(hashid, job.resumeId)
+    ? loadComposedProfile(hashid, job.resumeId)
+    : composeProfile(loadMaster(hashid), emptyResume(''));
 }
 
 export function listJobs(hashid: string): Job[] {
@@ -153,7 +239,7 @@ export function listJobs(hashid: string): Job[] {
     }
     const id = name.replace(/\.json$/, '');
     try {
-      jobs.push(readJsonFile<Job>(jobPath(hashid, id), emptyJob(id)));
+      jobs.push(hydrateJob(readJsonFile<Job>(jobPath(hashid, id), emptyJob(id))));
     } catch {
       // skip unreadable job files
     }
@@ -162,23 +248,27 @@ export function listJobs(hashid: string): Job[] {
 }
 
 export function loadJob(hashid: string, jobId: string): Job {
-  return readJsonFile<Job>(jobPath(hashid, jobId), emptyJob(jobId));
+  return hydrateJob(readJsonFile<Job>(jobPath(hashid, jobId), emptyJob(jobId)));
 }
 
 export function saveJob(hashid: string, job: Job): Job {
-  const next = { ...job, updatedAt: nowIso() };
+  const next = hydrateJob({ ...job, updatedAt: nowIso() });
   writeJsonFile(jobPath(hashid, job.id), next);
   return next;
 }
 
-export function createJob(hashid: string, rawJD: string): Job {
+export function createJob(
+  hashid: string,
+  input: { rawJD: string; structured?: StructuredJD | null },
+): Job {
   const id = `job_${Date.now().toString(36)}`;
-  const job: Job = {
+  const job = hydrateJob({
     ...emptyJob(id),
-    rawJD: rawJD.trim(),
+    rawJD: input.rawJD.trim(),
+    structured: input.structured ?? null,
     createdAt: nowIso(),
     updatedAt: nowIso(),
-  };
+  });
   writeJsonFile(jobPath(hashid, id), job);
   return job;
 }
@@ -187,13 +277,30 @@ export function deleteJob(hashid: string, jobId: string): void {
   deleteFile(jobPath(hashid, jobId));
 }
 
+function hydrateJob(job: Job): Job {
+  return {
+    id: job.id,
+    resumeId: String(job.resumeId ?? ''),
+    remark: String(job.remark ?? '').trim(),
+    rawJD: String(job.rawJD ?? ''),
+    structured: job.structured ? normalizeStructuredJd(job.structured) : null,
+    interviewQA: hydrateQAItems(job.interviewQA),
+    projectAssist: hydrateProjectAssist(job.projectAssist),
+    interviewResult: job.interviewResult ?? null,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+}
+
 export function emptyJob(id: string): Job {
   return {
     id,
+    resumeId: '',
+    remark: '',
     rawJD: '',
     structured: null,
     interviewQA: [],
-    relatedProjects: [],
+    projectAssist: null,
     interviewResult: null,
     createdAt: nowIso(),
     updatedAt: nowIso(),

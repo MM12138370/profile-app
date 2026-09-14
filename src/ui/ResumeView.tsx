@@ -1,34 +1,30 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { INFO_FIELDS } from '../resumeFields';
+import { masterPreviewRows, RESUME_FIELDS, type InfoRow } from '../resumeFields';
 import { colors, radius, space } from '../theme';
-import type { Profile } from '../types';
+import type { MasterTemplate, Profile } from '../types';
 import { EmptyState } from './EmptyState';
 import { SectionTree } from './SectionTree';
 
+export function MasterView({ master }: { master: MasterTemplate }) {
+  return <InfoCard rows={masterPreviewRows(master)} />;
+}
+
 export function ResumeView({ profile }: { profile: Profile }) {
   const info = profile.personalInfo;
-  const rows = INFO_FIELDS.flatMap((field) => {
-    const item = { key: field.key, label: field.label, value: info[field.key] };
-    if (field.key === 'name') {
-      return [item, { key: 'gender', label: '性别', value: info.gender }];
-    }
-    return [item];
-  });
+  const jobRows = RESUME_FIELDS.map((field) => ({
+    key: field.key,
+    label: field.label,
+    value: info[field.key],
+  }));
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.section}>个人信息</Text>
-      <View style={styles.card}>
-        {rows.map((row, index) => (
-          <InfoRow
-            key={row.key}
-            label={row.label}
-            value={row.value}
-            last={index === rows.length - 1}
-          />
-        ))}
-      </View>
+      <MasterView master={info} />
+
+      <Text style={styles.section}>求职信息</Text>
+      <InfoCard rows={jobRows} />
 
       <Text style={styles.section}>简历板块</Text>
       {profile.sections.length === 0 ? (
@@ -36,6 +32,21 @@ export function ResumeView({ profile }: { profile: Profile }) {
       ) : (
         <SectionTree nodes={profile.sections} onChange={() => undefined} readOnly />
       )}
+    </View>
+  );
+}
+
+function InfoCard({ rows }: { rows: InfoRow[] }) {
+  return (
+    <View style={styles.card}>
+      {rows.map((row, index) => (
+        <InfoRow
+          key={row.key}
+          label={row.label}
+          value={row.value}
+          last={index === rows.length - 1}
+        />
+      ))}
     </View>
   );
 }

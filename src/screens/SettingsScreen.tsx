@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '../auth/AuthContext';
@@ -8,9 +8,11 @@ import { colors, space } from '../theme';
 import type { AiSettings } from '../types';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Fields';
+import { useToast } from '../ui/Toast';
 
 export function SettingsScreen() {
   const { user, updateNickname, logout } = useAuth();
+  const toast = useToast();
   const [nickname, setNickname] = useState(user?.nickname ?? '');
   const [settings, setSettings] = useState<AiSettings | null>(null);
 
@@ -24,7 +26,7 @@ export function SettingsScreen() {
 
   async function saveNick() {
     await updateNickname(nickname);
-    Alert.alert('已保存', '下次欢迎页会用这个称呼。');
+    toast.show('保存成功');
   }
 
   async function save() {
@@ -37,7 +39,7 @@ export function SettingsScreen() {
       apiKey: settings.apiKey.trim(),
       model: settings.model.trim(),
     });
-    Alert.alert('已保存', '模型调用走本机直连，兼容 OpenAI 接口。');
+    toast.show('保存成功');
   }
 
   return (

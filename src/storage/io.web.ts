@@ -4,8 +4,10 @@ export {
   datasPath,
   jobPath,
   jobsDirPath,
+  masterPath,
   nowIso,
-  profilePath,
+  resumePath,
+  resumesDirPath,
   userDirPath,
   usersPath,
 } from './paths';

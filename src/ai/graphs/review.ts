@@ -1,6 +1,7 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph/web';
 
 import type { InterviewResult, Profile, StructuredJD } from '../../types';
+import { jdToPrompt } from '../../jobText';
 import { extractJson, GROUNDING_RULE } from '../json';
 import { complete } from '../llm';
 import { profileToPrompt } from '../profileText';
@@ -42,9 +43,8 @@ async function evaluate(state: StateType) {
     },
     {
       role: 'user',
-      content: `岗位：${state.jd.jobTitle}
-JD：
-${state.jd.jobDescription}
+      content: `岗位：
+${jdToPrompt(state.jd)}
 
 简历：
 ${profileToPrompt(state.profile)}

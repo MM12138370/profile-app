@@ -1,8 +1,10 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
   Text,
+  type GestureResponderEvent,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
@@ -12,11 +14,13 @@ import { colors, radius, space } from '../theme';
 
 type Variant = 'primary' | 'ghost' | 'danger';
 
-type Props = PressableProps & {
+type Props = Omit<PressableProps, 'onPress'> & {
   label: string;
   variant?: Variant;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
+  debounceMs?: number;
+  onPress?: (event: GestureResponderEvent) => void | Promise<void>;
 };
 
 export function Button({
@@ -25,20 +29,52 @@ export function Button({
   loading,
   disabled,
   style,
+  debounceMs = 700,
+  onPress,
   ...rest
 }: Props) {
+  const lock = useRef(false);
+  const mounted = useRef(true);
+  const [busy, setBusy] = useState(false);
   const isPrimary = variant === 'primary';
   const isDanger = variant === 'danger';
+  const blocked = disabled || loading || busy;
+
+  useEffect(() => {
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  async function handlePress(event: GestureResponderEvent) {
+    if (blocked || lock.current || !onPress) {
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    try {
+      await onPress(event);
+    } finally {
+      setTimeout(() => {
+        lock.current = false;
+        if (mounted.current) {
+          setBusy(false);
+        }
+      }, debounceMs);
+    }
+  }
+
   return (
     <Pressable
       accessibilityRole="button"
-      disabled={disabled || loading}
+      disabled={blocked}
+      onPress={(event) => void handlePress(event)}
       style={({ pressed }) => [
         styles.base,
         isPrimary && styles.primary,
         variant === 'ghost' && styles.ghost,
         isDanger && styles.danger,
-        (disabled || loading) && styles.disabled,
+        blocked && styles.disabled,
         pressed && styles.pressed,
         style,
       ]}

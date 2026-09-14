@@ -1,20 +1,27 @@
 import { loadAiSettings } from '../storage';
 
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | ChatContentPart[];
 };
 
-export async function complete(
-  messages: ChatMessage[],
-  options?: { temperature?: number },
-): Promise<string> {
+export async function complete(messages: ChatMessage[]): Promise<string> {
   const settings = await loadAiSettings();
   if (!settings.apiKey.trim()) {
     throw new Error('请先在设置里填写 API Key');
   }
+  const model = settings.model.trim();
   const base = settings.baseURL.replace(/\/+$/, '');
   const url = `${base}/chat/completions`;
+  const body: Record<string, unknown> = { model, messages };
+  if (!usesFixedSampling(model)) {
+    body.temperature = 0.2;
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
 
@@ -25,12 +32,7 @@ export async function complete(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${settings.apiKey.trim()}`,
       },
-      body: JSON.stringify({
-        model: settings.model.trim(),
-        temperature: options?.temperature ?? 0.2,
-        stream: false,
-        messages,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
@@ -56,13 +58,22 @@ export async function complete(
   }
 }
 
+/** Kimi / Moonshot 新模型不允许改 temperature，带上会 400。 */
+function usesFixedSampling(model: string): boolean {
+  const name = model.toLowerCase();
+  return name.startsWith('kimi-') || name.startsWith('moonshot-kimi');
+}
+
 function parseProviderError(raw: string, status: number): string {
   try {
     const data = JSON.parse(raw) as {
-      error?: { message?: string };
+      error?: { message?: string } | string;
       message?: string;
+      msg?: string;
     };
-    return data.error?.message || data.message || `接口错误 ${status}`;
+    const fromError =
+      typeof data.error === 'string' ? data.error : data.error?.message;
+    return fromError || data.message || data.msg || `接口错误 ${status}`;
   } catch {
     return raw.slice(0, 200) || `接口错误 ${status}`;
   }

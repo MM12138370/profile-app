@@ -10,8 +10,16 @@ export function userDirPath(hashid: string): string {
   return `datas/${hashid}`;
 }
 
-export function profilePath(hashid: string): string {
-  return `datas/${hashid}/profile.json`;
+export function masterPath(hashid: string): string {
+  return `datas/${hashid}/master.json`;
+}
+
+export function resumesDirPath(hashid: string): string {
+  return `datas/${hashid}/resumes`;
+}
+
+export function resumePath(hashid: string, resumeId: string): string {
+  return `datas/${hashid}/resumes/${resumeId}.json`;
 }
 
 export function jobsDirPath(hashid: string): string {

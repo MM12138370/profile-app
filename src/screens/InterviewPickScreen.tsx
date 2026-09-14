@@ -9,11 +9,12 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { useAuth } from '../auth/AuthContext';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { deleteJob, listJobs } from '../storage';
-import type { Job } from '../types';
+import { jobListTitle, qaReadyCount, type Job } from '../types';
 import { AppShell } from '../ui/AppShell';
 import { GiantAction } from '../ui/GiantAction';
 import { ListRow } from '../ui/ListRow';
 import { SwipeableRow } from '../ui/SwipeableRow';
+import { useToast } from '../ui/Toast';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'InterviewTab'>,
@@ -22,6 +23,7 @@ type Nav = CompositeNavigationProp<
 
 export function InterviewPickScreen() {
   const { user } = useAuth();
+  const toast = useToast();
   const navigation = useNavigation<Nav>();
   const [jobs, setJobs] = useState<Job[]>([]);
 
@@ -38,7 +40,7 @@ export function InterviewPickScreen() {
   );
 
   function onPickEmpty() {
-    Alert.alert('还没有岗位', '去岗位列表导入', [
+    Alert.alert('还没有岗位', '去岗位列表添加', [
       { text: '取消', style: 'cancel' },
       { text: '去导入', onPress: () => navigation.navigate('JobsTab') },
     ]);
@@ -48,17 +50,9 @@ export function InterviewPickScreen() {
     if (!user) {
       return;
     }
-    Alert.alert('删除岗位', '该岗位的 JD、问答和面试记录都会从本地删掉。', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          deleteJob(user.hashid, jobId);
-          reload();
-        },
-      },
-    ]);
+    deleteJob(user.hashid, jobId);
+    setJobs((prev) => prev.filter((job) => job.id !== jobId));
+    toast.show('删除成功');
   }
 
   return (
@@ -71,13 +65,18 @@ export function InterviewPickScreen() {
             <SwipeableRow key={job.id} onDelete={() => onDeleteJob(job.id)}>
               <ListRow
                 flush
-                title={job.structured?.jobTitle || '岗位'}
-                subtitle={
-                  job.interviewResult?.score !== undefined
-                    ? `上次 ${job.interviewResult.score} 分 · 匹配度 ${job.interviewResult.matchScore}/10`
-                    : '还没有面试记录'
-                }
-                onPress={() => navigation.navigate('InterviewSession', { jobId: job.id })}
+                title={jobListTitle(job)}
+                subtitle={interviewSubtitle(job)}
+                onPress={() => {
+                  if (qaReadyCount(job) === 0) {
+                    Alert.alert('还没有面试问答', '请先在岗位里生成或手写问题，这里会沿用同一批题。', [
+                      { text: '取消', style: 'cancel' },
+                      { text: '去岗位', onPress: () => navigation.navigate('JobDetail', { jobId: job.id }) },
+                    ]);
+                    return;
+                  }
+                  navigation.navigate('InterviewSession', { jobId: job.id });
+                }}
               />
             </SwipeableRow>
           ))}
@@ -85,6 +84,19 @@ export function InterviewPickScreen() {
       )}
     </AppShell>
   );
+}
+
+function interviewSubtitle(job: Job): string {
+  const count = qaReadyCount(job);
+  const score = job.interviewResult?.score;
+  const parts: string[] = [];
+  if (count > 0) {
+    parts.push(`已准备 ${count} 道题`);
+  }
+  if (score !== undefined) {
+    parts.push(`上次 ${score} 分 · 匹配度 ${job.interviewResult?.matchScore}/10`);
+  }
+  return parts.join(' · ') || '还没有面试问答';
 }
 
 const styles = StyleSheet.create({

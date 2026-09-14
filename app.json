@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.zhimian.assistant",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "用于识别岗位截图并提取岗位信息"
       }
     },
     "android": {
@@ -36,6 +37,12 @@
         "expo-file-system",
         {
           "enableFileSharing": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "用于识别岗位截图并提取岗位信息"
         }
       ]
     ],

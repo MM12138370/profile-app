@@ -11,6 +11,8 @@ import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { JobNewScreen } from '../screens/JobNewScreen';
 import { JobsScreen } from '../screens/JobsScreen';
 import { LoginScreen } from '../screens/LoginScreen';
+import { MasterTemplateScreen } from '../screens/MasterTemplateScreen';
+import { ProjectMatchScreen } from '../screens/ProjectMatchScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ResumeCenterScreen } from '../screens/ResumeCenterScreen';
 import { ResumePreviewScreen } from '../screens/ResumePreviewScreen';
@@ -121,12 +123,22 @@ export function RootNavigator() {
               options={{ title: '简历', gestureEnabled: false }}
             />
             <Stack.Screen
+              name="MasterTemplate"
+              component={MasterTemplateScreen}
+              options={{ title: '母模版', gestureEnabled: false }}
+            />
+            <Stack.Screen
               name="ResumePreview"
               component={ResumePreviewScreen}
               options={{ title: '简历预览' }}
             />
-            <Stack.Screen name="JobNew" component={JobNewScreen} options={{ title: '导入岗位' }} />
+            <Stack.Screen name="JobNew" component={JobNewScreen} options={{ title: '添加岗位' }} />
             <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ title: '岗位' }} />
+            <Stack.Screen
+              name="ProjectMatch"
+              component={ProjectMatchScreen}
+              options={{ title: '辅助项目匹配' }}
+            />
             <Stack.Screen
               name="InterviewSession"
               component={InterviewSessionScreen}

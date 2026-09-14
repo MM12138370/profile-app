@@ -7,11 +7,34 @@ import { colors, radius, space } from '../theme';
 export function SwipeableRow({
   children,
   onDelete,
+  onNote,
 }: {
   children: ReactNode;
   onDelete: () => void;
+  onNote?: () => void;
 }) {
   const swipeRef = useRef<Swipeable>(null);
+  const lock = useRef(false);
+
+  function close() {
+    swipeRef.current?.close();
+  }
+
+  function remove() {
+    if (lock.current) {
+      return;
+    }
+    lock.current = true;
+    close();
+    onDelete();
+  }
+
+  function note() {
+    close();
+    onNote?.();
+  }
+
+  const actions = <Actions onDelete={remove} onNote={onNote ? note : undefined} />;
 
   return (
     <View style={styles.outer}>
@@ -24,22 +47,8 @@ export function SwipeableRow({
         overshootRight={false}
         useNativeAnimations={Platform.OS !== 'web'}
         childrenContainerStyle={styles.front}
-        renderRightActions={() => (
-          <DeleteAction
-            onPress={() => {
-              swipeRef.current?.close();
-              onDelete();
-            }}
-          />
-        )}
-        renderLeftActions={() => (
-          <DeleteAction
-            onPress={() => {
-              swipeRef.current?.close();
-              onDelete();
-            }}
-          />
-        )}
+        renderRightActions={() => actions}
+        renderLeftActions={() => actions}
       >
         {children}
       </Swipeable>
@@ -47,16 +56,34 @@ export function SwipeableRow({
   );
 }
 
-function DeleteAction({ onPress }: { onPress: () => void }) {
+function Actions({
+  onDelete,
+  onNote,
+}: {
+  onDelete: () => void;
+  onNote?: () => void;
+}) {
   return (
-    <RectButton
-      accessibilityRole="button"
-      accessibilityLabel="删除"
-      style={styles.delete}
-      onPress={onPress}
-    >
-      <Text style={styles.deleteText}>删除</Text>
-    </RectButton>
+    <View style={styles.actions}>
+      {onNote ? (
+        <RectButton
+          accessibilityRole="button"
+          accessibilityLabel="备注"
+          style={styles.note}
+          onPress={onNote}
+        >
+          <Text style={styles.noteText}>备注</Text>
+        </RectButton>
+      ) : null}
+      <RectButton
+        accessibilityRole="button"
+        accessibilityLabel="删除"
+        style={styles.delete}
+        onPress={onDelete}
+      >
+        <Text style={styles.deleteText}>删除</Text>
+      </RectButton>
+    </View>
   );
 }
 
@@ -73,8 +100,24 @@ const styles = StyleSheet.create({
   front: {
     backgroundColor: colors.paper,
   },
+  actions: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+  },
+  note: {
+    width: 80,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+  },
+  noteText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
   delete: {
-    width: 88,
+    width: 80,
     alignSelf: 'stretch',
     justifyContent: 'center',
     alignItems: 'center',
