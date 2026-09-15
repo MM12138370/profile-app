@@ -3,13 +3,13 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 
 import { useAuth } from '../auth/AuthContext';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
-import { deleteJob, listJobs } from '../storage';
-import { jobListTitle, qaReadyCount, type Job } from '../types';
+import { listJobs, saveJob } from '../storage';
+import { hasSavedInterview, jobListTitle, type Job } from '../types';
 import { AppShell } from '../ui/AppShell';
 import { GiantAction } from '../ui/GiantAction';
 import { ListRow } from '../ui/ListRow';
@@ -29,7 +29,7 @@ export function InterviewPickScreen() {
 
   const reload = useCallback(() => {
     if (user) {
-      setJobs(listJobs(user.hashid).filter((job) => job.structured));
+      setJobs(listJobs(user.hashid).filter(hasSavedInterview));
     }
   }, [user]);
 
@@ -39,44 +39,31 @@ export function InterviewPickScreen() {
     }, [reload]),
   );
 
-  function onPickEmpty() {
-    Alert.alert('还没有岗位', '去岗位列表添加', [
-      { text: '取消', style: 'cancel' },
-      { text: '去导入', onPress: () => navigation.navigate('JobsTab') },
-    ]);
-  }
-
-  function onDeleteJob(jobId: string) {
+  function onClear(job: Job) {
     if (!user) {
       return;
     }
-    deleteJob(user.hashid, jobId);
-    setJobs((prev) => prev.filter((job) => job.id !== jobId));
-    toast.show('删除成功');
+    saveJob(user.hashid, { ...job, interviewResult: null });
+    setJobs((prev) => prev.filter((item) => item.id !== job.id));
+    toast.show('已从面试助手移除');
   }
 
   return (
     <AppShell>
       {jobs.length === 0 ? (
-        <GiantAction label="选择岗位模拟面试" onPress={onPickEmpty} />
+        <GiantAction
+          label="去岗位开始面试问答"
+          onPress={() => navigation.navigate('JobsTab')}
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {jobs.map((job) => (
-            <SwipeableRow key={job.id} onDelete={() => onDeleteJob(job.id)}>
+            <SwipeableRow key={job.id} onDelete={() => onClear(job)}>
               <ListRow
                 flush
                 title={jobListTitle(job)}
                 subtitle={interviewSubtitle(job)}
-                onPress={() => {
-                  if (qaReadyCount(job) === 0) {
-                    Alert.alert('还没有面试问答', '请先在岗位里生成或手写问题，这里会沿用同一批题。', [
-                      { text: '取消', style: 'cancel' },
-                      { text: '去岗位', onPress: () => navigation.navigate('JobDetail', { jobId: job.id }) },
-                    ]);
-                    return;
-                  }
-                  navigation.navigate('InterviewSession', { jobId: job.id });
-                }}
+                onPress={() => navigation.navigate('InterviewReview', { jobId: job.id })}
               />
             </SwipeableRow>
           ))}
@@ -87,16 +74,27 @@ export function InterviewPickScreen() {
 }
 
 function interviewSubtitle(job: Job): string {
-  const count = qaReadyCount(job);
-  const score = job.interviewResult?.score;
+  const result = job.interviewResult;
+  if (!result) {
+    return '还没有保存的面试';
+  }
   const parts: string[] = [];
-  if (count > 0) {
-    parts.push(`已准备 ${count} 道题`);
+  if (result.score !== undefined) {
+    parts.push(`${result.score} 分`);
   }
-  if (score !== undefined) {
-    parts.push(`上次 ${score} 分 · 匹配度 ${job.interviewResult?.matchScore}/10`);
+  if (result.matchScore !== undefined) {
+    parts.push(`匹配度 ${result.matchScore}/10`);
   }
-  return parts.join(' · ') || '还没有面试问答';
+  if (result.questions.length) {
+    parts.push(`${result.questions.length} 题`);
+  }
+  if (result.savedAt) {
+    const date = new Date(result.savedAt);
+    if (!Number.isNaN(date.getTime())) {
+      parts.push(`${date.getMonth() + 1}/${date.getDate()}`);
+    }
+  }
+  return parts.join(' · ');
 }
 
 const styles = StyleSheet.create({

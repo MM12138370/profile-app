@@ -5,6 +5,7 @@ import {
   emptyMaster,
   emptyResume,
   flattenSections,
+  hydrateInterviewResult,
   hydrateJdDigest,
   hydrateProjectAssist,
   hydrateQAItems,
@@ -41,9 +42,13 @@ const SESSION_KEY = 'zhimian.session.username';
 const AI_KEY = 'zhimian.ai.settings';
 
 const defaultAiSettings = (): AiSettings => ({
-  baseURL: 'https://api.openai.com/v1',
+  baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
   apiKey: '',
-  model: 'gpt-4o-mini',
+  model: '',
+  speechApiKey: '',
+  ttsResourceId: 'seed-tts-2.0',
+  sttResourceId: 'volc.bigasr.auc_turbo',
+  ttsVoice: 'zh_male_m191_uranus_bigtts',
 });
 
 export async function ensureStorage(): Promise<void> {
@@ -296,7 +301,7 @@ function hydrateJob(job: Job): Job {
     jdDigest: hydrateJdDigest(job.jdDigest),
     interviewQA: hydrateQAItems(job.interviewQA),
     projectAssist: hydrateProjectAssist(job.projectAssist),
-    interviewResult: job.interviewResult ?? null,
+    interviewResult: hydrateInterviewResult(job.interviewResult),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
   };
@@ -318,18 +323,31 @@ export function emptyJob(id: string): Job {
   };
 }
 
+function hydrateAiSettings(raw: Partial<AiSettings>): AiSettings {
+  const defaults = defaultAiSettings();
+  return {
+    baseURL: String(raw.baseURL ?? defaults.baseURL),
+    apiKey: String(raw.apiKey ?? defaults.apiKey),
+    model: String(raw.model ?? defaults.model),
+    speechApiKey: String(raw.speechApiKey ?? defaults.speechApiKey),
+    ttsResourceId: String(raw.ttsResourceId ?? defaults.ttsResourceId) || defaults.ttsResourceId,
+    sttResourceId: String(raw.sttResourceId ?? defaults.sttResourceId) || defaults.sttResourceId,
+    ttsVoice: String(raw.ttsVoice ?? defaults.ttsVoice) || defaults.ttsVoice,
+  };
+}
+
 export async function loadAiSettings(): Promise<AiSettings> {
   const raw = await kvGet(AI_KEY);
   if (!raw) {
     return defaultAiSettings();
   }
   try {
-    return { ...defaultAiSettings(), ...(JSON.parse(raw) as Partial<AiSettings>) };
+    return hydrateAiSettings(JSON.parse(raw) as Partial<AiSettings>);
   } catch {
     return defaultAiSettings();
   }
 }
 
 export async function saveAiSettings(settings: AiSettings): Promise<void> {
-  await kvSet(AI_KEY, JSON.stringify(settings));
+  await kvSet(AI_KEY, JSON.stringify(hydrateAiSettings(settings)));
 }

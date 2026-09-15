@@ -12,7 +12,7 @@ export type ChatMessage = {
 export async function complete(messages: ChatMessage[]): Promise<string> {
   const settings = await loadAiSettings();
   if (!settings.apiKey.trim()) {
-    throw new Error('请先在设置里填写 API Key');
+    throw new Error('请先在设置 › 连接大模型 里填写 API Key');
   }
   const model = settings.model.trim();
   const base = settings.baseURL.replace(/\/+$/, '');

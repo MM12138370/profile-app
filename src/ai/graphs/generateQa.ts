@@ -6,7 +6,7 @@ import { extractJson, GROUNDING_RULE } from '../json';
 import { complete } from '../llm';
 import { profileToPrompt } from '../profileText';
 
-/** 一次生成的面试问答固定题量（含随机穿插的手写题总额度）。 */
+/** 一次面试生成的固定题量。 */
 export const QA_QUESTION_COUNT = 10;
 
 const State = Annotation.Root({

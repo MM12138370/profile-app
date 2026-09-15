@@ -121,7 +121,38 @@ export type InterviewResult = {
   score?: number;
   optimizationPoints?: string;
   matchScore?: number;
+  savedAt?: string;
+  voice?: string;
 };
+
+export function hydrateInterviewResult(value: unknown): InterviewResult | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const rec = value as Record<string, unknown>;
+  const questions = Array.isArray(rec.questions) ? rec.questions.map((item) => String(item ?? '')) : [];
+  const standardAnswers = Array.isArray(rec.standardAnswers)
+    ? rec.standardAnswers.map((item) => String(item ?? ''))
+    : [];
+  const userAnswers = Array.isArray(rec.userAnswers)
+    ? rec.userAnswers.map((item) => String(item ?? ''))
+    : [];
+  if (!questions.length && rec.score === undefined) {
+    return null;
+  }
+  const score = rec.score === undefined ? undefined : Number(rec.score);
+  const matchScore = rec.matchScore === undefined ? undefined : Number(rec.matchScore);
+  return {
+    questions,
+    standardAnswers,
+    userAnswers,
+    score: Number.isFinite(score) ? score : undefined,
+    matchScore: Number.isFinite(matchScore) ? matchScore : undefined,
+    optimizationPoints: rec.optimizationPoints == null ? undefined : String(rec.optimizationPoints),
+    savedAt: typeof rec.savedAt === 'string' ? rec.savedAt : undefined,
+    voice: typeof rec.voice === 'string' ? rec.voice : undefined,
+  };
+}
 
 export type Job = {
   id: string;
@@ -154,7 +185,15 @@ export type AiSettings = {
   baseURL: string;
   apiKey: string;
   model: string;
+  speechApiKey: string;
+  ttsResourceId: string;
+  sttResourceId: string;
+  ttsVoice: string;
 };
+
+export function speechConfigured(settings: AiSettings): boolean {
+  return Boolean(settings.speechApiKey.trim() || settings.apiKey.trim());
+}
 
 export const emptyMaster = (): MasterTemplate => ({
   name: '',
@@ -297,87 +336,8 @@ export function qaQuestionKey(question: string): string {
   return question.trim().replace(/\s+/g, ' ');
 }
 
-export function withQAEdits(item: QAItem, patch: Partial<Pick<QAItem, 'question' | 'answer'>>): QAItem {
-  const question = patch.question ?? item.question;
-  const answer = patch.answer ?? item.answer;
-  const stale = question !== item.question || answer !== item.answer;
-  return {
-    ...item,
-    question,
-    answer,
-    polishedAnswer: stale ? '' : item.polishedAnswer,
-    polishTips: stale ? '' : item.polishTips,
-  };
-}
-
-function insertRandomly<T>(base: T[], extras: T[]): T[] {
-  const mixed = [...base];
-  for (const item of extras) {
-    mixed.splice(Math.floor(Math.random() * (mixed.length + 1)), 0, item);
-  }
-  return mixed;
-}
-
-export function mergeGeneratedQuestions(
-  existing: QAItem[],
-  generated: string[],
-  total = 10,
-): QAItem[] {
-  const manuals = existing.filter((item) => item.source === 'manual' && item.question.trim());
-  const blanks = existing.filter((item) => item.source === 'manual' && !item.question.trim());
-  const taken = new Set(manuals.map((item) => qaQuestionKey(item.question)));
-  const aiSlots = Math.max(0, total - manuals.length);
-  const ai = generated
-    .map((question) => question.trim())
-    .filter((question) => question && !taken.has(qaQuestionKey(question)))
-    .slice(0, aiSlots)
-    .map((question) => emptyQAItem({ question, source: 'ai' }));
-  return [...insertRandomly(ai, manuals), ...blanks];
-}
-
-/** 岗位页里需要作答、可润色的题（手写题只存问题，面试时再答）。 */
-export function polishableQA(items: QAItem[]): QAItem[] {
-  return items.filter((item) => item.source !== 'manual' && item.question.trim());
-}
-
-export function questionsAnswered(items: QAItem[]): boolean {
-  const ready = polishableQA(items);
-  return ready.length > 0 && ready.every((item) => item.answer.trim().length > 0);
-}
-
-export function qaReadyCount(job: Job): number {
-  return job.interviewQA.filter((item) => item.question.trim()).length;
-}
-
-export function referenceAnswer(item: QAItem): string {
-  return item.polishedAnswer.trim() || item.answer.trim();
-}
-
-export function collectReusableQuestions(
-  jobs: Job[],
-  exceptJobId: string,
-): { jobTitle: string; question: string }[] {
-  const seen = new Set<string>();
-  const out: { jobTitle: string; question: string }[] = [];
-  for (const job of jobs) {
-    if (job.id === exceptJobId) {
-      continue;
-    }
-    const title = jobListTitle(job);
-    for (const item of job.interviewQA) {
-      if (item.source !== 'manual') {
-        continue;
-      }
-      const question = item.question.trim();
-      const key = qaQuestionKey(question);
-      if (!question || seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      out.push({ jobTitle: title, question });
-    }
-  }
-  return out;
+export function hasSavedInterview(job: Job): boolean {
+  return Boolean(job.interviewResult?.questions.some((item) => item.trim()));
 }
 
 export function userLabel(user: Pick<UserRecord, 'username' | 'nickname'>): string {

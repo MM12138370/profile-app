@@ -10,7 +10,9 @@ export type RootStackParamList = {
   JobStructured: { jobId: string };
   ProjectMatch: { jobId: string };
   InterviewSession: { jobId: string };
+  InterviewReview: { jobId: string };
   Settings: undefined;
+  AiConnect: undefined;
 };
 
 export type MainTabParamList = {

@@ -5,7 +5,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View } from 'react-native';
 
 import { useAuth } from '../auth/AuthContext';
+import { AiConnectScreen } from '../screens/AiConnectScreen';
 import { InterviewPickScreen } from '../screens/InterviewPickScreen';
+import { InterviewReviewScreen } from '../screens/InterviewReviewScreen';
 import { InterviewSessionScreen } from '../screens/InterviewSessionScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { JobNewScreen } from '../screens/JobNewScreen';
@@ -148,9 +150,15 @@ export function RootNavigator() {
             <Stack.Screen
               name="InterviewSession"
               component={InterviewSessionScreen}
-              options={{ title: '模拟面试' }}
+              options={{ title: '面试问答' }}
+            />
+            <Stack.Screen
+              name="InterviewReview"
+              component={InterviewReviewScreen}
+              options={{ title: '面试记录' }}
             />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: '设置' }} />
+            <Stack.Screen name="AiConnect" component={AiConnectScreen} options={{ title: '连接大模型' }} />
           </>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />

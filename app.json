@@ -44,6 +44,14 @@
         {
           "photosPermission": "用于识别岗位截图并提取岗位信息"
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "用于把你的口头回答转成文字。",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
       ]
     ],
     "splash": {
