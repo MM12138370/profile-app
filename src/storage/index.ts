@@ -4,6 +4,8 @@ import {
   composeProfile,
   emptyMaster,
   emptyResume,
+  flattenSections,
+  hydrateJdDigest,
   hydrateProjectAssist,
   hydrateQAItems,
   masterHasContent,
@@ -147,6 +149,13 @@ export function saveMaster(hashid: string, master: MasterTemplate): void {
   writeJsonFile(masterPath(hashid), master);
 }
 
+function hydrateResume(resume: Resume): Resume {
+  return {
+    ...resume,
+    sections: flattenSections(resume.sections),
+  };
+}
+
 export function listResumes(hashid: string): Resume[] {
   ensureUserWorkspace(hashid);
   const dir = resumesDirPath(hashid);
@@ -159,7 +168,7 @@ export function listResumes(hashid: string): Resume[] {
       continue;
     }
     const id = name.replace(/\.json$/, '');
-    resumes.push(readJsonFile<Resume>(resumePath(hashid, id), emptyResume(id)));
+    resumes.push(hydrateResume(readJsonFile<Resume>(resumePath(hashid, id), emptyResume(id))));
   }
   return resumes.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
@@ -169,11 +178,11 @@ export function resumeExists(hashid: string, resumeId: string): boolean {
 }
 
 export function loadResume(hashid: string, resumeId: string): Resume {
-  return readJsonFile<Resume>(resumePath(hashid, resumeId), emptyResume(resumeId));
+  return hydrateResume(readJsonFile<Resume>(resumePath(hashid, resumeId), emptyResume(resumeId)));
 }
 
 export function saveResume(hashid: string, resume: Resume): Resume {
-  const next = { ...resume, updatedAt: nowIso() };
+  const next = hydrateResume({ ...resume, updatedAt: nowIso() });
   writeJsonFile(resumePath(hashid, resume.id), next);
   return next;
 }
@@ -184,12 +193,12 @@ export function createResume(
 ): Resume {
   const id = `resume_${Date.now().toString(36)}`;
   const now = nowIso();
-  const resume: Resume = {
+  const resume = hydrateResume({
     ...draft,
     id,
     createdAt: now,
     updatedAt: now,
-  };
+  });
   writeJsonFile(resumePath(hashid, id), resume);
   return resume;
 }
@@ -284,6 +293,7 @@ function hydrateJob(job: Job): Job {
     remark: String(job.remark ?? '').trim(),
     rawJD: String(job.rawJD ?? ''),
     structured: job.structured ? normalizeStructuredJd(job.structured) : null,
+    jdDigest: hydrateJdDigest(job.jdDigest),
     interviewQA: hydrateQAItems(job.interviewQA),
     projectAssist: hydrateProjectAssist(job.projectAssist),
     interviewResult: job.interviewResult ?? null,
@@ -299,6 +309,7 @@ export function emptyJob(id: string): Job {
     remark: '',
     rawJD: '',
     structured: null,
+    jdDigest: null,
     interviewQA: [],
     projectAssist: null,
     interviewResult: null,

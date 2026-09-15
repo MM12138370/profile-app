@@ -27,7 +27,7 @@ export function ToastHost({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ show }}>
       {children}
       {message ? (
-        <View pointerEvents="none" style={[styles.wrap, { bottom: insets.bottom + 72 }]}>
+        <View style={[styles.wrap, { bottom: insets.bottom + 72, pointerEvents: 'none' }]}>
           <View style={styles.bubble}>
             <Text style={styles.text}>{message}</Text>
           </View>

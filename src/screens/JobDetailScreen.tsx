@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { runAnalyzeJob, runGenerateQa, runPolishQa } from '../ai';
+import { QA_QUESTION_COUNT, runAnalyzeJob, runGenerateQa, runPolishQa } from '../ai';
 import { useAuth } from '../auth/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
 import { deleteJob, listJobs, listResumes, loadComposedProfile, loadJob, saveJob } from '../storage';
@@ -25,18 +25,16 @@ import {
   jobListTitle,
   jobMetaLine,
   mergeGeneratedQuestions,
-  normalizeStructuredJd,
+  polishableQA,
   qaQuestionKey,
   questionsAnswered,
-  withQAEdits,
   type Job,
+  type QAItem,
   type Resume,
-  type StructuredJD,
 } from '../types';
 import { BusyOverlay } from '../ui/BusyOverlay';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
-import { JobFields } from '../ui/JobFields';
 import { QACard } from '../ui/QACard';
 import { QuestionPicker } from '../ui/QuestionPicker';
 import { ResumePicker } from '../ui/ResumePicker';
@@ -44,11 +42,6 @@ import { useToast } from '../ui/Toast';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'JobDetail'>;
 type R = RouteProp<RootStackParamList, 'JobDetail'>;
-
-function structuredOrNull(value: StructuredJD): StructuredJD | null {
-  const next = normalizeStructuredJd(value);
-  return Object.values(next).some((item) => item.length > 0) ? next : null;
-}
 
 export function JobDetailScreen() {
   const { user } = useAuth();
@@ -61,16 +54,18 @@ export function JobDetailScreen() {
   const [busy, setBusy] = useState('');
   const [editing, setEditing] = useState(false);
   const [draftJd, setDraftJd] = useState('');
-  const [draftStructured, setDraftStructured] = useState<StructuredJD>(normalizeStructuredJd({}));
   const [pickingResume, setPickingResume] = useState(false);
   const [pickingQuestions, setPickingQuestions] = useState(false);
+  const [focusQAId, setFocusQAId] = useState<string | null>(null);
 
   const persist = useCallback(
     (next: Job) => {
       if (!user) {
-        return;
+        return next;
       }
-      setJob(saveJob(user.hashid, next));
+      const saved = saveJob(user.hashid, next);
+      setJob(saved);
+      return saved;
     },
     [user],
   );
@@ -80,7 +75,6 @@ export function JobDetailScreen() {
       return;
     }
     setDraftJd(job.rawJD);
-    setDraftStructured(job.structured ?? normalizeStructuredJd({}));
     setEditing(true);
   }, [job]);
 
@@ -89,14 +83,12 @@ export function JobDetailScreen() {
       return;
     }
     const rawJD = draftJd.trim();
-    const structured = structuredOrNull(draftStructured);
-    const unchanged = rawJD === job.rawJD && JSON.stringify(structured) === JSON.stringify(job.structured);
-    if (!unchanged) {
-      persist({ ...job, rawJD, structured });
+    if (rawJD !== job.rawJD) {
+      persist({ ...job, rawJD });
       toast.show('保存成功');
     }
     setEditing(false);
-  }, [draftJd, draftStructured, job, persist, toast]);
+  }, [draftJd, job, persist, toast]);
 
   useFocusEffect(
     useCallback(() => {
@@ -153,15 +145,16 @@ export function JobDetailScreen() {
     });
   }, [busy, editing, job, jobId, navigation, saveEdit, startEdit, toast, user]);
 
-  async function run(label: string, work: (current: Job) => Promise<Job>) {
+  async function run(label: string, work: (current: Job) => Promise<Job>): Promise<Job | null> {
     if (!job || !user) {
-      return;
+      return null;
     }
     setBusy(label);
     try {
-      persist(await work(job));
+      return persist(await work(job));
     } catch (e) {
       Alert.alert('没做完', e instanceof Error ? e.message : '请稍后重试');
+      return null;
     } finally {
       setBusy('');
     }
@@ -188,11 +181,13 @@ export function JobDetailScreen() {
       const manuals = current.interviewQA
         .filter((item) => item.source === 'manual' && item.question.trim())
         .map((item) => item.question);
-      const questions = await runGenerateQa(current.structured!, profile, manuals);
+      const aiCount = Math.max(0, QA_QUESTION_COUNT - manuals.length);
+      const questions =
+        aiCount > 0 ? await runGenerateQa(current.structured!, profile, manuals, aiCount) : [];
       return {
         ...current,
         resumeId: resume.id,
-        interviewQA: mergeGeneratedQuestions(current.interviewQA, questions),
+        interviewQA: mergeGeneratedQuestions(current.interviewQA, questions, QA_QUESTION_COUNT),
       };
     });
   }
@@ -201,10 +196,12 @@ export function JobDetailScreen() {
     if (!job) {
       return;
     }
+    const item = emptyQAItem();
     persist({
       ...job,
-      interviewQA: [...job.interviewQA, emptyQAItem()],
+      interviewQA: [...job.interviewQA, item],
     });
+    setFocusQAId(item.id);
   }
 
   function importQuestions(questions: string[]) {
@@ -226,29 +223,45 @@ export function JobDetailScreen() {
     setPickingQuestions(false);
   }
 
+  function updateQA(index: number, next: QAItem) {
+    if (!job) {
+      return;
+    }
+    persist({
+      ...job,
+      interviewQA: job.interviewQA.map((qa, i) => (i === index ? next : qa)),
+    });
+  }
+
+  function removeQA(index: number) {
+    if (!job) {
+      return;
+    }
+    persist({
+      ...job,
+      interviewQA: job.interviewQA.filter((_, i) => i !== index),
+    });
+  }
+
   function polishAll() {
     if (!job?.structured) {
       return;
     }
     if (!questionsAnswered(job.interviewQA)) {
-      Alert.alert('先答完', '请先把每道有题目的问答都写上自己的回答，再一起润色。');
+      Alert.alert('先答完', '请先把 AI 生成的题目都写上自己的回答，再一起润色。');
       return;
     }
     void run('正在润色回答…', async (current) => {
-      const ready = current.interviewQA.filter((item) => item.question.trim() && item.answer.trim());
+      const ready = polishableQA(current.interviewQA).filter((item) => item.answer.trim());
       const polished = await runPolishQa(
         current.structured!,
         ready.map((item) => ({ question: item.question, answer: item.answer })),
       );
-      let cursor = 0;
+      const byId = new Map(ready.map((item, index) => [item.id, polished[index]]));
       return {
         ...current,
         interviewQA: current.interviewQA.map((item) => {
-          if (!item.question.trim() || !item.answer.trim()) {
-            return item;
-          }
-          const next = polished[cursor];
-          cursor += 1;
+          const next = byId.get(item.id);
           if (!next) {
             return item;
           }
@@ -262,13 +275,30 @@ export function JobDetailScreen() {
     });
   }
 
+  async function openStructured() {
+    if (!job) {
+      return;
+    }
+    if (job.structured) {
+      navigation.navigate('JobStructured', { jobId: job.id });
+      return;
+    }
+    const next = await run('正在结构化 JD…', async (current) => ({
+      ...current,
+      structured: await runAnalyzeJob({ text: current.rawJD }),
+      jdDigest: null,
+    }));
+    if (next?.structured) {
+      navigation.navigate('JobStructured', { jobId: next.id });
+    }
+  }
+
   if (!job || !user) {
     return null;
   }
 
-  const view = editing ? { ...job, structured: draftStructured } : job;
-  const title = jobListTitle(view);
-  const meta = jobMetaLine(view) || '还没有结构化';
+  const title = jobListTitle(job);
+  const meta = jobMetaLine(job) || '还没有结构化';
   const canPolish = questionsAnswered(job.interviewQA);
 
   return (
@@ -316,18 +346,13 @@ export function JobDetailScreen() {
 
           <Text style={styles.section}>三项能力</Text>
           <Text style={styles.hint}>
-            三项可分开点。生成问答会穿插手写题；辅助项目匹配请填写你真实跟进过的项目。
+            三项可分开点。结构化结果在独立页查看，并可提炼重点；生成问答会穿插手写题；辅助项目匹配请填写你真实跟进过的项目。
           </Text>
           <View style={styles.actions}>
             <Button
-              label="JD 结构化"
+              label={job.structured ? '查看结构化结果' : 'JD 结构化'}
               disabled={editing}
-              onPress={() =>
-                void run('正在结构化 JD…', async (current) => ({
-                  ...current,
-                  structured: await runAnalyzeJob({ text: current.rawJD }),
-                }))
-              }
+              onPress={() => void openStructured()}
             />
             <Button
               variant="ghost"
@@ -343,21 +368,10 @@ export function JobDetailScreen() {
             />
           </View>
 
-          {editing || job.structured ? (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>结构化结果</Text>
-              <JobFields
-                value={editing ? draftStructured : job.structured!}
-                editing={editing}
-                onChange={setDraftStructured}
-              />
-            </View>
-          ) : null}
-
           <Text style={styles.section}>面试问答</Text>
           <Text style={styles.hint}>
-            可手动加入面试里觉得会遇到的问题，也可以从其他岗位选用已手写过的题。点「生成面试问答」时，这些手写题会随机穿插进 AI
-            题目里，答完后可一起润色。
+            每次生成固定 {QA_QUESTION_COUNT} 道题，一次性作答。手动加题只需写下问题，面试时再作答；也可从其他岗位选用已手写过的题。点「生成面试问答」时，手写题会占用名额并随机穿插进
+            AI 题目里；AI 题可在这里作答并润色。
           </Text>
           {job.interviewQA.length === 0 ? (
             <EmptyState title="还没有问答" hint="先结构化 JD，再选择一份简历生成，或手动加题。" />
@@ -367,26 +381,15 @@ export function JobDetailScreen() {
                 key={item.id}
                 item={item}
                 index={index}
-                onChange={(next) => {
-                  persist({
-                    ...job,
-                    interviewQA: job.interviewQA.map((qa, i) =>
-                      i === index ? withQAEdits(qa, next) : qa,
-                    ),
-                  });
-                }}
-                onDelete={() =>
-                  persist({
-                    ...job,
-                    interviewQA: job.interviewQA.filter((_, i) => i !== index),
-                  })
-                }
+                autoFocus={item.id === focusQAId}
+                onChange={(next) => updateQA(index, next)}
+                onDelete={() => removeQA(index)}
               />
             ))
           )}
           <Button variant="ghost" label="手动加一条" onPress={addManual} />
           <Button variant="ghost" label="从其他岗位选用" onPress={() => setPickingQuestions(true)} />
-          {job.interviewQA.some((item) => item.question.trim()) ? (
+          {polishableQA(job.interviewQA).length > 0 ? (
             <Button label="润色全部回答" disabled={!canPolish || editing} onPress={polishAll} />
           ) : null}
 
@@ -428,14 +431,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   actions: { gap: space.sm },
-  card: {
-    backgroundColor: colors.paper,
-    borderRadius: radius.md,
-    padding: space.md,
-    gap: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.line,
-  },
   cardTitle: { fontWeight: '700', color: colors.ink, fontSize: 15 },
   edit: { color: colors.accent, fontWeight: '700' },
   delete: { color: colors.danger, fontWeight: '600' },

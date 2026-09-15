@@ -149,7 +149,12 @@ export function ProfileScreen() {
           <Text style={styles.section}>简历板块</Text>
           <SectionTree
             nodes={resume.sections}
-            onChange={(sections) => apply({ ...resume, sections })}
+            onChange={(sections) => {
+              const current = resumeRef.current;
+              if (current) {
+                apply({ ...current, sections });
+              }
+            }}
           />
         </ScrollView>
         <View style={styles.footer}>

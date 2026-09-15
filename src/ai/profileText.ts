@@ -1,5 +1,4 @@
-import type { Profile, SectionNode } from '../types';
-import { isSectionItem } from '../types';
+import type { Profile, SectionItem } from '../types';
 
 export function profileToPrompt(profile: Profile): string {
   const p = profile.personalInfo;
@@ -21,14 +20,8 @@ export function profileToPrompt(profile: Profile): string {
   return lines.join('\n');
 }
 
-export function renderSections(nodes: SectionNode[], depth = 0): string {
-  const indent = '  '.repeat(depth);
+export function renderSections(nodes: SectionItem[]): string {
   return nodes
-    .map((node) => {
-      if (isSectionItem(node)) {
-        return `${indent}- ${node.title || '未命名'}：${node.content || ''}`;
-      }
-      return `${indent}- 分组：\n${renderSections(node, depth + 1)}`;
-    })
+    .map((node) => `- ${node.title || '未命名'}：${node.content || ''}`)
     .join('\n');
 }

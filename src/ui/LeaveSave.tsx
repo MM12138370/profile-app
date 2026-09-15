@@ -106,7 +106,7 @@ export function SavePromptOverlay({
     return null;
   }
   return (
-    <View style={styles.overlay} pointerEvents="box-none">
+    <View style={[styles.overlay, { pointerEvents: 'box-none' }]}>
       <Pressable style={styles.mask} onPress={onContinue} />
       <View style={styles.dialog}>
         <Text style={styles.title}>保存修改？</Text>

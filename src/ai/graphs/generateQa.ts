@@ -6,10 +6,14 @@ import { extractJson, GROUNDING_RULE } from '../json';
 import { complete } from '../llm';
 import { profileToPrompt } from '../profileText';
 
+/** 一次生成的面试问答固定题量（含随机穿插的手写题总额度）。 */
+export const QA_QUESTION_COUNT = 10;
+
 const State = Annotation.Root({
   jd: Annotation<StructuredJD>,
   profile: Annotation<Profile>,
   avoid: Annotation<string[]>,
+  count: Annotation<number>,
   questions: Annotation<string[]>,
 });
 
@@ -17,11 +21,13 @@ type StateType = {
   jd: StructuredJD;
   profile: Profile;
   avoid: string[];
+  count: number;
   questions: string[];
 };
 
 async function draft(state: StateType) {
   const avoided = state.avoid.map((item) => item.trim()).filter(Boolean);
+  const count = Math.max(1, Math.round(state.count));
   const content = await complete([
     {
       role: 'system',
@@ -38,10 +44,11 @@ ${jdToPrompt(state.jd)}
 ${profileToPrompt(state.profile)}
 
 ${avoided.length ? `以下问题已准备，请勿重复：\n${avoided.map((item) => `- ${item}`).join('\n')}\n` : ''}
-请生成 6 到 10 道面试题，输出：
+请正好生成 ${count} 道面试题，不多不少，输出：
 { "questions": ["...", "..."] }
 
 要求：
+- questions 数组长度必须恰好为 ${count}
 - 问题要紧扣该岗位
 - 可以追问简历里出现过的项目、职责、技术
 - 简历没有的能力不要在问题里写成对方已经做过
@@ -53,6 +60,7 @@ ${avoided.length ? `以下问题已准备，请勿重复：\n${avoided.map((item
     ? parsed.questions
         .map((item) => String(item ?? '').trim())
         .filter(Boolean)
+        .slice(0, count)
     : [];
   return { questions };
 }
@@ -67,10 +75,12 @@ export async function runGenerateQa(
   jd: StructuredJD,
   profile: Profile,
   avoid: string[] = [],
+  count: number = QA_QUESTION_COUNT,
 ): Promise<string[]> {
-  const result = await graph.invoke({ jd, profile, avoid, questions: [] });
+  const target = Math.max(1, Math.round(count));
+  const result = await graph.invoke({ jd, profile, avoid, count: target, questions: [] });
   if (!result.questions.length) {
     throw new Error('没有生成可用的问题，请完善简历后重试');
   }
-  return result.questions;
+  return result.questions.slice(0, target);
 }

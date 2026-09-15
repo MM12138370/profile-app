@@ -30,7 +30,7 @@ export function ResumeView({ profile }: { profile: Profile }) {
       {profile.sections.length === 0 ? (
         <EmptyState title="还没有板块" hint="编辑简历时可以补充工作经历、项目等。" />
       ) : (
-        <SectionTree nodes={profile.sections} onChange={() => undefined} readOnly />
+        <SectionTree nodes={profile.sections} readOnly />
       )}
     </View>
   );

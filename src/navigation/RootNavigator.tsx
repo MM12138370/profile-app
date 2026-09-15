@@ -10,6 +10,7 @@ import { InterviewSessionScreen } from '../screens/InterviewSessionScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { JobNewScreen } from '../screens/JobNewScreen';
 import { JobsScreen } from '../screens/JobsScreen';
+import { JobStructuredScreen } from '../screens/JobStructuredScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { MasterTemplateScreen } from '../screens/MasterTemplateScreen';
 import { ProjectMatchScreen } from '../screens/ProjectMatchScreen';
@@ -134,6 +135,11 @@ export function RootNavigator() {
             />
             <Stack.Screen name="JobNew" component={JobNewScreen} options={{ title: '添加岗位' }} />
             <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ title: '岗位' }} />
+            <Stack.Screen
+              name="JobStructured"
+              component={JobStructuredScreen}
+              options={{ title: '结构化结果' }}
+            />
             <Stack.Screen
               name="ProjectMatch"
               component={ProjectMatchScreen}

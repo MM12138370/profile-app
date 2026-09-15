@@ -7,6 +7,7 @@ export type RootStackParamList = {
   ResumePreview: { resumeId: string };
   JobNew: undefined;
   JobDetail: { jobId: string };
+  JobStructured: { jobId: string };
   ProjectMatch: { jobId: string };
   InterviewSession: { jobId: string };
   Settings: undefined;

@@ -22,7 +22,7 @@ export type Resume = {
   jobIntention: string;
   yearsOfWork: string;
   intendedCities: string;
-  sections: SectionNode[];
+  sections: SectionItem[];
   createdAt: string;
   updatedAt: string;
 };
@@ -33,7 +33,7 @@ export type PersonalInfo = MasterTemplate &
 /** 预览和模型用的合成结果，不落盘。 */
 export type Profile = {
   personalInfo: PersonalInfo;
-  sections: SectionNode[];
+  sections: SectionItem[];
 };
 
 export type SectionItem = {
@@ -52,6 +52,13 @@ export type StructuredJD = {
   benefits: string;
 };
 
+/** 从结构化 JD 再压缩出的重点，不编造岗位里没有的内容。 */
+export type JdDigest = {
+  talent: string;
+  work: string;
+  offer: string;
+};
+
 export function normalizeStructuredJd(value: unknown): StructuredJD {
   const rec = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const pick = (key: string) => String(rec[key] ?? '').trim();
@@ -65,6 +72,29 @@ export function normalizeStructuredJd(value: unknown): StructuredJD {
     requirements: pick('requirements'),
     benefits: pick('benefits'),
   };
+}
+
+export function structuredJdOrNull(value: unknown): StructuredJD | null {
+  const next = normalizeStructuredJd(value);
+  return Object.values(next).some((item) => item.length > 0) ? next : null;
+}
+
+export function normalizeJdDigest(value: unknown): JdDigest {
+  const rec = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const pick = (key: string) => String(rec[key] ?? '').trim();
+  return {
+    talent: pick('talent'),
+    work: pick('work'),
+    offer: pick('offer'),
+  };
+}
+
+export function hydrateJdDigest(value: unknown): JdDigest | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const next = normalizeJdDigest(value);
+  return next.talent || next.work || next.offer ? next : null;
 }
 
 export type QASource = 'ai' | 'manual';
@@ -99,6 +129,7 @@ export type Job = {
   remark: string;
   rawJD: string;
   structured: StructuredJD | null;
+  jdDigest: JdDigest | null;
   interviewQA: QAItem[];
   projectAssist: ProjectAssist | null;
   interviewResult: InterviewResult | null;
@@ -194,12 +225,26 @@ export function isSectionNode(value: unknown): value is SectionNode {
   return typeof rec.title === 'string' && typeof rec.content === 'string';
 }
 
-export function sanitizeSections(value: unknown): SectionNode[] {
+/** 旧存档里的嵌套分组摊成条目，编辑页只维护扁平列表。 */
+export function flattenSections(value: unknown): SectionItem[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.filter(isSectionNode);
+  const out: SectionItem[] = [];
+  for (const node of value) {
+    if (!isSectionNode(node)) {
+      continue;
+    }
+    if (isSectionItem(node)) {
+      out.push({ title: node.title, content: node.content });
+    } else {
+      out.push(...flattenSections(node));
+    }
+  }
+  return out;
 }
+
+export const emptySection = (): SectionItem => ({ title: '', content: '' });
 
 export function newQaId(): string {
   return `qa_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -273,19 +318,30 @@ function insertRandomly<T>(base: T[], extras: T[]): T[] {
   return mixed;
 }
 
-export function mergeGeneratedQuestions(existing: QAItem[], generated: string[]): QAItem[] {
+export function mergeGeneratedQuestions(
+  existing: QAItem[],
+  generated: string[],
+  total = 10,
+): QAItem[] {
   const manuals = existing.filter((item) => item.source === 'manual' && item.question.trim());
   const blanks = existing.filter((item) => item.source === 'manual' && !item.question.trim());
   const taken = new Set(manuals.map((item) => qaQuestionKey(item.question)));
+  const aiSlots = Math.max(0, total - manuals.length);
   const ai = generated
     .map((question) => question.trim())
     .filter((question) => question && !taken.has(qaQuestionKey(question)))
+    .slice(0, aiSlots)
     .map((question) => emptyQAItem({ question, source: 'ai' }));
   return [...insertRandomly(ai, manuals), ...blanks];
 }
 
+/** 岗位页里需要作答、可润色的题（手写题只存问题，面试时再答）。 */
+export function polishableQA(items: QAItem[]): QAItem[] {
+  return items.filter((item) => item.source !== 'manual' && item.question.trim());
+}
+
 export function questionsAnswered(items: QAItem[]): boolean {
-  const ready = items.filter((item) => item.question.trim());
+  const ready = polishableQA(items);
   return ready.length > 0 && ready.every((item) => item.answer.trim().length > 0);
 }
 

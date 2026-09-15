@@ -1,19 +1,25 @@
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 
 import { colors, radius, space } from '../theme';
 
 type Props = TextInputProps & {
-  label: string;
+  label?: string;
 };
 
-export function Field({ label, style, ...rest }: Props) {
+export function Field({ label, style, editable = true, ...rest }: Props) {
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={[styles.wrap, { pointerEvents: editable ? 'auto' : 'none' }]}>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
         placeholderTextColor={colors.faint}
-        style={[styles.input, rest.multiline && styles.multiline, style]}
+        editable={editable}
         {...rest}
+        style={[
+          styles.input,
+          rest.multiline && styles.multiline,
+          Platform.OS === 'web' && styles.web,
+          style,
+        ]}
       />
     </View>
   );
@@ -41,5 +47,8 @@ const styles = StyleSheet.create({
   multiline: {
     minHeight: 88,
     textAlignVertical: 'top',
+  },
+  web: {
+    outlineWidth: 0,
   },
 });
