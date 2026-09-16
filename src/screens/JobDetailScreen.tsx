@@ -4,7 +4,6 @@ import { useCallback, useLayoutEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,16 +11,17 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { runAnalyzeJob } from '../ai';
 import { useAuth } from '../auth/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
-import { deleteJob, loadJob, saveJob } from '../storage';
+import { loadJob, saveJob } from '../storage';
 import { colors, radius, space } from '../theme';
 import { jobListTitle, jobMetaLine, type Job } from '../types';
 import { BusyOverlay } from '../ui/BusyOverlay';
 import { Button } from '../ui/Button';
+import { HeaderMoreButton, OverflowMenu } from '../ui/OverflowMenu';
 import { useToast } from '../ui/Toast';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'JobDetail'>;
@@ -30,11 +30,13 @@ type R = RouteProp<RootStackParamList, 'JobDetail'>;
 export function JobDetailScreen() {
   const { user } = useAuth();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const { jobId } = useRoute<R>().params;
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState('');
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [draftJd, setDraftJd] = useState('');
 
   const persist = useCallback(
@@ -71,56 +73,31 @@ export function JobDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) {
+      if (!user || editing) {
         return;
       }
-      if (!editing) {
-        setJob(loadJob(user.hashid, jobId));
-      }
+      setJob(loadJob(user.hashid, jobId));
     }, [user, jobId, editing]),
   );
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () =>
-        job ? (
-          <View style={styles.headerActions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={editing ? '完成' : '修改'}
-              hitSlop={8}
-              disabled={Boolean(busy)}
-              onPress={() => (editing ? saveEdit() : startEdit())}
-            >
-              <Text style={styles.edit}>{editing ? '完成' : '修改'}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="删除"
-              hitSlop={8}
-              onPress={() => {
-                Alert.alert('删除岗位', '该岗位的 JD、项目匹配和面试记录都会从本地删掉。', [
-                  { text: '取消', style: 'cancel' },
-                  {
-                    text: '删除',
-                    style: 'destructive',
-                    onPress: () => {
-                      if (user) {
-                        deleteJob(user.hashid, jobId);
-                        toast.show('删除成功');
-                        navigation.goBack();
-                      }
-                    },
-                  },
-                ]);
-              }}
-            >
-              <Text style={styles.delete}>删除</Text>
-            </Pressable>
-          </View>
-        ) : null,
+        !job ? null : editing ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="完成"
+            hitSlop={8}
+            disabled={Boolean(busy)}
+            onPress={saveEdit}
+          >
+            <Text style={styles.done}>完成</Text>
+          </Pressable>
+        ) : (
+          <HeaderMoreButton disabled={Boolean(busy)} onPress={() => setMenuOpen(true)} />
+        ),
     });
-  }, [busy, editing, job, jobId, navigation, saveEdit, startEdit, toast, user]);
+  }, [busy, editing, job, navigation, saveEdit]);
 
   async function openStructured() {
     if (!job) {
@@ -147,6 +124,14 @@ export function JobDetailScreen() {
     }
   }
 
+  function requireStructured(title: string, go: () => void) {
+    if (!job?.structured) {
+      Alert.alert(title, '请先查看结构化结果。');
+      return;
+    }
+    go();
+  }
+
   if (!job || !user) {
     return null;
   }
@@ -155,12 +140,21 @@ export function JobDetailScreen() {
   const meta = jobMetaLine(job) || '还没有结构化';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <View style={styles.safe}>
       <BusyOverlay visible={Boolean(busy)} message={busy} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <OverflowMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={[
+          { label: '修改', onPress: startEdit },
+          { label: '查看结构化结果', onPress: () => void openStructured() },
+          {
+            label: '辅助项目匹配',
+            onPress: () => requireStructured('还不能匹配', () => navigation.navigate('ProjectMatch', { jobId: job.id })),
+          },
+        ]}
+      />
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.meta}>{meta}</Text>
@@ -178,45 +172,28 @@ export function JobDetailScreen() {
           ) : (
             <Text style={styles.body}>{job.rawJD}</Text>
           )}
-
-          <Text style={styles.section}>三项能力</Text>
-          <Text style={styles.hint}>
-            三项可分开点。结构化结果在独立页查看；面试问答会另开页面，用语音作答，结束后再决定是否写入面试助手；辅助项目匹配请填写你真实跟进过的项目。
-          </Text>
-          <View style={styles.actions}>
-            <Button
-              label={job.structured ? '查看结构化结果' : 'JD 结构化'}
-              disabled={editing}
-              onPress={() => void openStructured()}
-            />
-            <Button
-              variant="ghost"
-              label="面试问答"
-              disabled={editing || !job.structured}
-              onPress={() => navigation.navigate('InterviewSession', { jobId: job.id })}
-            />
-            <Button
-              variant="ghost"
-              label="辅助项目匹配"
-              disabled={editing || !job.structured}
-              onPress={() => navigation.navigate('ProjectMatch', { jobId: job.id })}
-            />
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space.sm) }]}>
+        <Button
+          label="面试问答"
+          disabled={editing}
+          onPress={() =>
+            requireStructured('还不能面试', () => navigation.navigate('InterviewSession', { jobId: job.id }))
+          }
+        />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  content: { padding: space.lg, gap: space.md, paddingBottom: 56 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  content: { padding: space.lg, gap: space.md },
   title: { fontSize: 28, fontWeight: '800', color: colors.ink },
   meta: { color: colors.muted, fontSize: 14 },
   section: { marginTop: 8, fontSize: 18, fontWeight: '700', color: colors.ink },
-  hint: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   body: { color: colors.ink, fontSize: 15, lineHeight: 22 },
   jdInput: {
     backgroundColor: colors.paper,
@@ -230,7 +207,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
   },
-  actions: { gap: space.sm },
-  edit: { color: colors.accent, fontWeight: '700' },
-  delete: { color: colors.danger, fontWeight: '600' },
+  bar: {
+    backgroundColor: colors.paper,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+  },
+  done: { color: colors.accent, fontWeight: '700' },
 });
