@@ -24,7 +24,7 @@ type StateType = {
   questions: string[];
 };
 
-async function draft(state: StateType) {
+async function draft(state: StateType, config?: { signal?: AbortSignal }) {
   const avoided = state.avoid.map((item) => item.trim()).filter(Boolean);
   const count = Math.max(1, Math.round(state.count));
   const focus = state.focus.trim();
@@ -32,16 +32,17 @@ async function draft(state: StateType) {
     ? `候选人简历：
 ${profileToPrompt(state.profile)}`
     : '未选择简历，只根据岗位出题。';
-  const content = await complete([
-    {
-      role: 'system',
-      content:
-        '你是面试教练。根据岗位结构化结果和候选人真实简历只出面试问题，不要写答案。只输出 JSON。' +
-        GROUNDING_RULE,
-    },
-    {
-      role: 'user',
-      content: `岗位：
+  const content = await complete(
+    [
+      {
+        role: 'system',
+        content:
+          '你是面试教练。根据岗位结构化结果和候选人真实简历只出面试问题，不要写答案。只输出 JSON。' +
+          GROUNDING_RULE,
+      },
+      {
+        role: 'user',
+        content: `岗位：
 ${jdToPrompt(state.jd)}
 
 ${resume}
@@ -57,8 +58,10 @@ ${focus ? `出题倾向：${focus}\n` : ''}
 - 可以追问简历里出现过的项目、职责、技术
 - 简历没有的能力不要在问题里写成对方已经做过
 - 只出问题，不要答案`,
-    },
-  ]);
+      },
+    ],
+    config?.signal,
+  );
   const parsed = extractJson<{ questions?: unknown }>(content);
   const questions = Array.isArray(parsed.questions)
     ? parsed.questions
@@ -81,16 +84,20 @@ export async function runGenerateQa(input: {
   avoid?: string[];
   count?: number;
   focus?: string;
+  signal?: AbortSignal;
 }): Promise<string[]> {
   const count = Math.max(1, Math.round(input.count ?? 5));
-  const result = await graph.invoke({
-    jd: input.jd,
-    profile: input.profile ?? null,
-    avoid: input.avoid ?? [],
-    count,
-    focus: input.focus ?? '',
-    questions: [],
-  });
+  const result = await graph.invoke(
+    {
+      jd: input.jd,
+      profile: input.profile ?? null,
+      avoid: input.avoid ?? [],
+      count,
+      focus: input.focus ?? '',
+      questions: [],
+    },
+    { signal: input.signal },
+  );
   if (!result.questions.length) {
     throw new Error('没有生成可用的问题，请完善岗位或简历后重试');
   }

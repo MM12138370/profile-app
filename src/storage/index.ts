@@ -23,6 +23,7 @@ import {
   type StructuredJD,
   type UserRecord,
 } from '../types';
+import { parseArchive, packUserArchive, writeArchive } from './archive';
 import {
   audioDirPath,
   audioPath,
@@ -46,6 +47,11 @@ import {
   writeJsonFile,
 } from './io';
 import { kvGet, kvRemove, kvSet } from './kv';
+import { shareArchiveFile } from './transfer';
+
+export type { ArchiveManifest, ArchivePack } from './archive';
+export { parseArchive } from './archive';
+export { pickArchiveBytes } from './transfer';
 
 const SESSION_KEY = 'zhimian.session.username';
 const AI_KEY = 'zhimian.ai.settings';
@@ -470,4 +476,22 @@ export async function loadAiSettings(): Promise<AiSettings> {
 
 export async function saveAiSettings(settings: AiSettings): Promise<void> {
   await kvSet(AI_KEY, JSON.stringify(hydrateAiSettings(settings)));
+}
+
+export async function exportUserArchive(user: UserRecord): Promise<void> {
+  const pack = packUserArchive(user);
+  await shareArchiveFile(pack.fileName, pack.bytes);
+}
+
+export function importArchiveIntoUser(hashid: string, bytes: Uint8Array): void {
+  writeArchive(hashid, parseArchive(bytes));
+}
+
+export async function restoreArchiveAsUser(bytes: Uint8Array): Promise<UserRecord> {
+  const pack = parseArchive(bytes);
+  const record = await loginOrRegister(pack.manifest.user.username, pack.manifest.user.nickname);
+  const nick = pack.manifest.user.nickname?.trim();
+  const next = nick ? saveNickname(record.username, nick) : record;
+  writeArchive(next.hashid, pack);
+  return next;
 }

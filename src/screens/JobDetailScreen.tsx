@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useCallback, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { runAnalyzeJob } from '../ai';
+import { isAbortError } from '../ai/llm';
 import { useAuth } from '../auth/AuthContext';
 import { generateInterview, interviewStatus } from '../edit/interview';
 import type { RootStackParamList } from '../navigation/types';
@@ -48,6 +49,8 @@ export function JobDetailScreen() {
   const [resumeId, setResumeId] = useState('');
   const [count, setCount] = useState('5');
   const [focus, setFocus] = useState('');
+  const busyRef = useRef(false);
+  const generateAbort = useRef<AbortController | null>(null);
 
   const persist = useCallback(
     (next: Job) => {
@@ -83,7 +86,7 @@ export function JobDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!user || editing) {
+      if (!user || editing || busy) {
         return;
       }
       const loaded = loadJob(user.hashid, jobId);
@@ -93,8 +96,15 @@ export function JobDetailScreen() {
       }
       setJob(loaded);
       setResumes(listResumes(user.hashid));
-    }, [user, jobId, editing, navigation]),
+    }, [busy, editing, jobId, navigation, user]),
   );
+
+  useEffect(() => {
+    return () => {
+      generateAbort.current?.abort();
+      generateAbort.current = null;
+    };
+  }, []);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -116,13 +126,14 @@ export function JobDetailScreen() {
   }, [busy, editing, job, navigation, saveEdit]);
 
   async function openStructured() {
-    if (!job) {
+    if (!job || busyRef.current) {
       return;
     }
     if (job.structured) {
       navigation.navigate('JobStructured', { jobId: job.id });
       return;
     }
+    busyRef.current = true;
     setBusy('正在结构化 JD…');
     try {
       const next = persist({
@@ -136,6 +147,7 @@ export function JobDetailScreen() {
     } catch (e) {
       Alert.alert('没做完', e instanceof Error ? e.message : '请稍后重试');
     } finally {
+      busyRef.current = false;
       setBusy('');
     }
   }
@@ -149,6 +161,9 @@ export function JobDetailScreen() {
   }
 
   function openGenerate() {
+    if (!job || busyRef.current || interviewStatus(job) !== 'idle') {
+      return;
+    }
     requireStructured('还不能面试', () => {
       setResumeId('');
       setCount('5');
@@ -159,21 +174,31 @@ export function JobDetailScreen() {
   }
 
   async function confirmGenerate() {
-    if (!user || !job) {
+    if (!user || !job || busyRef.current || interviewStatus(job) !== 'idle') {
       return;
     }
+    busyRef.current = true;
     setSheetOpen(false);
     setBusy('正在生成面试与语音…');
+    const ac = new AbortController();
+    generateAbort.current = ac;
     try {
       await generateInterview(
         user.hashid,
         job.id,
         { resumeId, count: Number(count), focus },
         setJob,
+        ac.signal,
       );
     } catch (e) {
-      Alert.alert('没生成', e instanceof Error ? e.message : '请稍后重试');
+      if (!isAbortError(e)) {
+        Alert.alert('没生成', e instanceof Error ? e.message : '请稍后重试');
+      }
     } finally {
+      if (generateAbort.current === ac) {
+        generateAbort.current = null;
+      }
+      busyRef.current = false;
       setBusy('');
     }
   }
@@ -251,7 +276,7 @@ export function JobDetailScreen() {
           onChangeText={setFocus}
           placeholder="可空，例如深挖项目落地"
         />
-        <Button label="确认生成" onPress={() => void confirmGenerate()} />
+        <Button label="确认生成" disabled={Boolean(busy)} onPress={confirmGenerate} />
       </CenterSheet>
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

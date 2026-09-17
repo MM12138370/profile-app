@@ -72,9 +72,64 @@ function revokeBlob(rel: string): void {
   }
 }
 
+function base64ToBytes(raw: string): Uint8Array {
+  const binary = globalThis.atob(raw);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function textToBytes(text: string): Uint8Array {
+  return new TextEncoder().encode(text);
+}
+
 export function writeBytes(rel: string, bytes: Uint8Array): void {
   revokeBlob(rel);
   localStorage.setItem(key(rel), bytesToBase64(bytes));
+}
+
+export function writeText(rel: string, text: string): void {
+  revokeBlob(rel);
+  localStorage.setItem(key(rel), text);
+}
+
+export function readText(rel: string): string | null {
+  if (typeof localStorage === 'undefined') {
+    return null;
+  }
+  return localStorage.getItem(key(rel));
+}
+
+export function readBytes(rel: string): Uint8Array | null {
+  const raw = readText(rel);
+  if (raw == null) {
+    return null;
+  }
+  if (rel.endsWith('.mp3')) {
+    return base64ToBytes(raw);
+  }
+  return textToBytes(raw);
+}
+
+export function deleteDir(rel: string): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+  const exact = key(rel);
+  const prefix = `${exact}/`;
+  const remove: string[] = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const item = localStorage.key(i);
+    if (item === exact || item?.startsWith(prefix)) {
+      remove.push(item);
+    }
+  }
+  for (const item of remove) {
+    revokeBlob(item.slice(PREFIX.length));
+    localStorage.removeItem(item);
+  }
 }
 
 export function audioPlayUri(rel: string): string | null {

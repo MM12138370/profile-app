@@ -73,15 +73,25 @@ export function InterviewSessionScreen() {
     void loadAiSettings().then(setSettings);
   }, [jobId, navigation, user]);
 
+  const playRef = useRef(play);
+  const stopRef = useRef(stop);
+  const toastRef = useRef(toast);
+  playRef.current = play;
+  stopRef.current = stop;
+  toastRef.current = toast;
+
   useEffect(() => {
     if (!archiveUri) {
-      stop();
+      stopRef.current();
       return;
     }
-    void play(archiveUri).catch((e) => {
-      toast.show(e instanceof Error ? e.message : '朗读失败');
+    void playRef.current(archiveUri).catch((e) => {
+      toastRef.current.show(e instanceof Error ? e.message : '朗读失败');
     });
-  }, [archiveUri, play, stop, toast, turn?.id]);
+    return () => {
+      stopRef.current();
+    };
+  }, [archiveUri]);
 
   useLayoutEffect(() => {
     navigation.setOptions({

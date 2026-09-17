@@ -9,7 +9,10 @@ export type ChatMessage = {
   content: string | ChatContentPart[];
 };
 
-export async function complete(messages: ChatMessage[]): Promise<string> {
+export async function complete(messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
+  if (signal?.aborted) {
+    throw abortError();
+  }
   const settings = await loadAiSettings();
   if (!settings.apiKey.trim()) {
     throw new Error('请先在设置 › 连接大模型 里填写 API Key');
@@ -23,7 +26,13 @@ export async function complete(messages: ChatMessage[]): Promise<string> {
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 120000);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 120000);
 
   try {
     const response = await fetch(url, {
@@ -38,6 +47,9 @@ export async function complete(messages: ChatMessage[]): Promise<string> {
 
     const raw = await response.text();
     if (!response.ok) {
+      if (response.status === 429) {
+        throw new Error('请求过于频繁，请稍后再试');
+      }
       throw new Error(parseProviderError(raw, response.status));
     }
     const data = JSON.parse(raw) as {
@@ -50,12 +62,26 @@ export async function complete(messages: ChatMessage[]): Promise<string> {
     return content;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('请求超时，请稍后重试');
+      if (timedOut) {
+        throw new Error('请求超时，请稍后重试');
+      }
+      throw abortError();
     }
     throw error;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
   }
+}
+
+export function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function abortError(): Error {
+  const error = new Error('已取消');
+  error.name = 'AbortError';
+  return error;
 }
 
 /** Kimi / Moonshot 新模型不允许改 temperature，带上会 400。 */

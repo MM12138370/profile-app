@@ -8,7 +8,13 @@ import {
   type ReactNode,
 } from 'react';
 
-import { loginOrRegister, logout as persistLogout, restoreSession, saveNickname } from '../storage';
+import {
+  loginOrRegister,
+  logout as persistLogout,
+  restoreArchiveAsUser,
+  restoreSession,
+  saveNickname,
+} from '../storage';
 import type { UserRecord } from '../types';
 
 type AuthContextValue = {
@@ -16,6 +22,7 @@ type AuthContextValue = {
   ready: boolean;
   login: (username: string, nickname?: string) => Promise<void>;
   updateNickname: (nickname: string) => Promise<void>;
+  importArchive: (bytes: Uint8Array) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -48,9 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const importArchive = useCallback(async (bytes: Uint8Array) => {
+    setUser(await restoreArchiveAsUser(bytes));
+  }, []);
+
   const value = useMemo(
-    () => ({ user, ready, login, updateNickname, logout }),
-    [user, ready, login, updateNickname, logout],
+    () => ({ user, ready, login, updateNickname, importArchive, logout }),
+    [user, ready, login, updateNickname, importArchive, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

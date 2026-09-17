@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,18 +11,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '../auth/AuthContext';
-import { listUsers } from '../storage';
+import { listUsers, parseArchive, pickArchiveBytes } from '../storage';
 import { colors, radius, space } from '../theme';
+import { BusyOverlay } from '../ui/BusyOverlay';
 import { Button } from '../ui/Button';
 import { Field } from '../ui/Fields';
 
 export function LoginScreen() {
-  const { login } = useAuth();
+  const { login, importArchive } = useAuth();
   const [username, setUsername] = useState('');
   const [nickname, setNickname] = useState('');
   const [busy, setBusy] = useState(false);
+  const [busyText, setBusyText] = useState('');
   const [error, setError] = useState('');
-  const known = useMemo(() => listUsers().map((u) => u.username), []);
+  const [known, setKnown] = useState(() => listUsers().map((u) => u.username));
 
   const trimmed = username.trim();
   const exists = known.includes(trimmed);
@@ -38,8 +41,55 @@ export function LoginScreen() {
     }
   }
 
+  async function onImport() {
+    setError('');
+    try {
+      const bytes = await pickArchiveBytes();
+      if (!bytes) {
+        return;
+      }
+      const pack = parseArchive(bytes);
+      const name = pack.manifest.user.username;
+      const occupied = listUsers().some((item) => item.username === name);
+      Alert.alert(
+        '导入存档',
+        occupied
+          ? `本机已有账号 ${name}，导入会覆盖其现有数据。`
+          : `将导入账号 ${name} 的存档并进入。`,
+        [
+          { text: '取消', style: 'cancel' },
+          {
+            text: '导入',
+            style: occupied ? 'destructive' : 'default',
+            onPress: () => {
+              void applyImport(bytes);
+            },
+          },
+        ],
+      );
+    } catch (e) {
+      Alert.alert('没导入', e instanceof Error ? e.message : '请选择 .zm 存档');
+    }
+  }
+
+  async function applyImport(bytes: Uint8Array) {
+    setBusy(true);
+    setBusyText('正在读入存档');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    try {
+      await importArchive(bytes);
+    } catch (e) {
+      setKnown(listUsers().map((item) => item.username));
+      Alert.alert('没导入', e instanceof Error ? e.message : '请稍后重试');
+    } finally {
+      setBusy(false);
+      setBusyText('');
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
+      <BusyOverlay visible={Boolean(busyText)} message={busyText} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -78,6 +128,7 @@ export function LoginScreen() {
           ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button label={exists ? '进入' : '注册'} loading={busy} onPress={() => void onEnter()} />
+          <Button label="导入存档" variant="ghost" disabled={busy} onPress={() => void onImport()} />
         </View>
         {known.length > 0 ? (
           <View style={styles.known}>

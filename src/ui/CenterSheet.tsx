@@ -12,11 +12,8 @@ export function CenterSheet({
   onClose: () => void;
   children: ReactNode;
 }) {
-  if (!visible) {
-    return null;
-  }
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.mask} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
           {children}

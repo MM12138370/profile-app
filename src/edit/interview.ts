@@ -1,4 +1,5 @@
 import { runGenerateQa } from '../ai';
+import { isAbortError } from '../ai/llm';
 import {
   loadAiSettings,
   loadBank,
@@ -17,7 +18,7 @@ import {
 } from '../types';
 import { dropQaAudio, writeQaAudio } from './audio';
 
-const liveGenerate = new Map<string, number>();
+const liveGenerate = new Set<string>();
 
 function requireJob(hashid: string, jobId: string): Job {
   const job = loadJob(hashid, jobId);
@@ -39,18 +40,20 @@ export async function generateInterview(
   jobId: string,
   input: { resumeId: string; count: number; focus: string },
   onUpdate?: (job: Job) => void,
+  signal?: AbortSignal,
 ): Promise<Job> {
+  if (liveGenerate.has(jobId)) {
+    throw new Error('正在生成面试');
+  }
   const job = requireJob(hashid, jobId);
-  if (interviewStatus(job) !== 'idle') {
+  if (job.session.length > 0) {
     throw new Error('请先结束当前面试');
   }
   if (!job.structured) {
     throw new Error('请先查看结构化结果');
   }
+  liveGenerate.add(jobId);
   const count = Math.min(20, Math.max(1, Math.round(input.count) || 5));
-  const token = (liveGenerate.get(jobId) ?? 0) + 1;
-  liveGenerate.set(jobId, token);
-  onUpdate?.({ ...job, resumeId: input.resumeId });
   const session: QaTurn[] = [];
   try {
     const bank = job.bankId ? loadBank(hashid, job.bankId) : null;
@@ -64,15 +67,15 @@ export async function generateInterview(
       avoid: bank?.items.map((item) => item.question) ?? [],
       count,
       focus: input.focus,
+      signal,
     });
-    if (liveGenerate.get(jobId) !== token) {
-      return requireJob(hashid, jobId);
+    if (signal?.aborted) {
+      throw abortError();
     }
     const settings = await loadAiSettings();
     for (const question of questions) {
-      if (liveGenerate.get(jobId) !== token) {
-        dropQaAudio(session);
-        return requireJob(hashid, jobId);
+      if (signal?.aborted) {
+        throw abortError();
       }
       const turn = emptyQaTurn(question);
       session.push(speechConfigured(settings) ? await writeQaAudio(hashid, turn, settings) : turn);
@@ -87,14 +90,12 @@ export async function generateInterview(
     return next;
   } catch (error) {
     dropQaAudio(session);
-    if (liveGenerate.get(jobId) === token) {
+    if (!isAbortError(error)) {
       onUpdate?.(requireJob(hashid, jobId));
     }
     throw error;
   } finally {
-    if (liveGenerate.get(jobId) === token) {
-      liveGenerate.delete(jobId);
-    }
+    liveGenerate.delete(jobId);
   }
 }
 
@@ -119,4 +120,10 @@ export async function archiveSessionTurns(
     onUpdate?.(job);
   }
   return job;
+}
+
+function abortError(): Error {
+  const error = new Error('已取消');
+  error.name = 'AbortError';
+  return error;
 }
