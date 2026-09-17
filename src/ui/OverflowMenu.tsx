@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mask: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(26,23,20,0.28)',
   },
   anchor: {

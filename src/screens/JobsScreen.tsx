@@ -3,7 +3,7 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 
 import { useAuth } from '../auth/AuthContext';
@@ -30,6 +30,8 @@ export function JobsScreen() {
   const navigation = useNavigation<Nav>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [editing, setEditing] = useState<Job | null>(null);
+  const [removing, setRemoving] = useState<Job | null>(null);
+  const [removeBank, setRemoveBank] = useState(false);
   const [remark, setRemark] = useState('');
 
   const reload = useCallback(() => {
@@ -48,12 +50,18 @@ export function JobsScreen() {
     navigation.navigate('JobNew');
   }
 
-  function onDeleteJob(jobId: string) {
-    if (!user) {
+  function askDelete(job: Job) {
+    setRemoveBank(false);
+    setRemoving(job);
+  }
+
+  function onDeleteJob() {
+    if (!user || !removing) {
       return;
     }
-    deleteJob(user.hashid, jobId);
-    setJobs((prev) => prev.filter((job) => job.id !== jobId));
+    deleteJob(user.hashid, removing.id, removeBank);
+    setJobs((prev) => prev.filter((job) => job.id !== removing.id));
+    setRemoving(null);
     toast.show('删除成功');
   }
 
@@ -81,7 +89,7 @@ export function JobsScreen() {
           {jobs.map((job) => (
             <SwipeableRow
               key={job.id}
-              onDelete={() => onDeleteJob(job.id)}
+              onDelete={() => askDelete(job)}
               onNote={() => openRemark(job)}
             >
               <ListRow
@@ -94,6 +102,22 @@ export function JobsScreen() {
           ))}
         </ScrollView>
       )}
+
+      <CenterSheet visible={Boolean(removing)} onClose={() => setRemoving(null)}>
+        <Text style={styles.sheetTitle}>删除岗位</Text>
+        {removing?.bankId ? (
+          <View style={styles.toggleRow}>
+            <Text style={styles.toggleLabel}>同时删除已保存的问答</Text>
+            <Switch value={removeBank} onValueChange={setRemoveBank} trackColor={{ true: colors.accent }} />
+          </View>
+        ) : (
+          <Text style={styles.toggleLabel}>确定删除该岗位？</Text>
+        )}
+        <View style={styles.sheetActions}>
+          <Button variant="ghost" label="取消" style={styles.half} onPress={() => setRemoving(null)} />
+          <Button variant="danger" label="删除" style={styles.half} onPress={onDeleteJob} />
+        </View>
+      </CenterSheet>
 
       <CenterSheet visible={Boolean(editing)} onClose={() => setEditing(null)}>
         <Text style={styles.sheetTitle}>备注名称</Text>
@@ -142,4 +166,16 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   half: { flex: 1 },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.md,
+  },
+  toggleLabel: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.ink,
+    lineHeight: 22,
+  },
 });

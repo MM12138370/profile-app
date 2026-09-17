@@ -3,13 +3,13 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 
 import { useAuth } from '../auth/AuthContext';
 import type { MainTabParamList, RootStackParamList } from '../navigation/types';
-import { listJobs, saveJob } from '../storage';
-import { hasSavedInterview, jobListTitle, type Job } from '../types';
+import { deleteBank, listBanks, loadJob } from '../storage';
+import { jobListTitle, type QaBank } from '../types';
 import { AppShell } from '../ui/AppShell';
 import { GiantAction } from '../ui/GiantAction';
 import { ListRow } from '../ui/ListRow';
@@ -25,11 +25,11 @@ export function InterviewPickScreen() {
   const { user } = useAuth();
   const toast = useToast();
   const navigation = useNavigation<Nav>();
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [banks, setBanks] = useState<QaBank[]>([]);
 
   const reload = useCallback(() => {
     if (user) {
-      setJobs(listJobs(user.hashid).filter(hasSavedInterview));
+      setBanks(listBanks(user.hashid));
     }
   }, [user]);
 
@@ -39,31 +39,37 @@ export function InterviewPickScreen() {
     }, [reload]),
   );
 
-  function onClear(job: Job) {
+  function onDelete(bank: QaBank) {
     if (!user) {
       return;
     }
-    saveJob(user.hashid, { ...job, interviewResult: null });
-    setJobs((prev) => prev.filter((item) => item.id !== job.id));
-    toast.show('已从面试助手移除');
+    Alert.alert('删除问答', '确定删除该岗位已保存的问答列表？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: () => {
+          deleteBank(user.hashid, bank.id);
+          setBanks((prev) => prev.filter((item) => item.id !== bank.id));
+          toast.show('已删除问答');
+        },
+      },
+    ]);
   }
 
   return (
     <AppShell>
-      {jobs.length === 0 ? (
-        <GiantAction
-          label="去岗位开始面试问答"
-          onPress={() => navigation.navigate('JobsTab')}
-        />
+      {banks.length === 0 ? (
+        <GiantAction label="去岗位开始面试问答" onPress={() => navigation.navigate('JobsTab')} />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
-          {jobs.map((job) => (
-            <SwipeableRow key={job.id} onDelete={() => onClear(job)}>
+          {banks.map((bank) => (
+            <SwipeableRow key={bank.id} onDelete={() => onDelete(bank)}>
               <ListRow
                 flush
-                title={jobListTitle(job)}
-                subtitle={interviewSubtitle(job)}
-                onPress={() => navigation.navigate('InterviewReview', { jobId: job.id })}
+                title={bankTitle(user?.hashid ?? '', bank)}
+                subtitle={`${bank.items.length} 题`}
+                onPress={() => navigation.navigate('InterviewBank', { bankId: bank.id })}
               />
             </SwipeableRow>
           ))}
@@ -73,28 +79,9 @@ export function InterviewPickScreen() {
   );
 }
 
-function interviewSubtitle(job: Job): string {
-  const result = job.interviewResult;
-  if (!result) {
-    return '还没有保存的面试';
-  }
-  const parts: string[] = [];
-  if (result.score !== undefined) {
-    parts.push(`${result.score} 分`);
-  }
-  if (result.matchScore !== undefined) {
-    parts.push(`匹配度 ${result.matchScore}/10`);
-  }
-  if (result.questions.length) {
-    parts.push(`${result.questions.length} 题`);
-  }
-  if (result.savedAt) {
-    const date = new Date(result.savedAt);
-    if (!Number.isNaN(date.getTime())) {
-      parts.push(`${date.getMonth() + 1}/${date.getDate()}`);
-    }
-  }
-  return parts.join(' · ');
+function bankTitle(hashid: string, bank: QaBank): string {
+  const job = bank.jobId ? loadJob(hashid, bank.jobId) : null;
+  return job ? jobListTitle(job) : bank.title;
 }
 
 const styles = StyleSheet.create({

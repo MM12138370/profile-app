@@ -65,6 +65,10 @@ export function ProjectMatchScreen() {
         return;
       }
       const loaded = loadJob(user.hashid, jobId);
+      if (!loaded) {
+        Alert.alert('岗位已不存在', '', [{ text: '好', onPress: () => navigation.goBack() }]);
+        return;
+      }
       if (!loaded.structured) {
         Alert.alert('还不能匹配', '请先对该岗位做 JD 结构化。', [
           { text: '好', onPress: () => navigation.goBack() },

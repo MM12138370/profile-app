@@ -97,62 +97,34 @@ export function hydrateJdDigest(value: unknown): JdDigest | null {
   return next.talent || next.work || next.offer ? next : null;
 }
 
-export type QASource = 'ai' | 'manual';
-
-export type QAItem = {
-  id: string;
-  question: string;
-  answer: string;
-  source: QASource;
-  polishedAnswer: string;
-  polishTips: string;
-};
-
 export type ProjectAssist = {
   original: string;
   optimized: string;
   points: string;
 };
 
-export type InterviewResult = {
-  questions: string[];
-  standardAnswers: string[];
-  userAnswers: string[];
-  score?: number;
-  optimizationPoints?: string;
-  matchScore?: number;
-  savedAt?: string;
-  voice?: string;
+export type InterviewStatus = 'idle' | 'generating' | 'active';
+export type SessionKind = 'fresh' | 'review';
+export type Proficiency = 1 | 2 | 3;
+
+export type QaTurn = {
+  id: string;
+  question: string;
+  audio: string;
+  audioText: string;
+  answer: string;
 };
 
-export function hydrateInterviewResult(value: unknown): InterviewResult | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-  const rec = value as Record<string, unknown>;
-  const questions = Array.isArray(rec.questions) ? rec.questions.map((item) => String(item ?? '')) : [];
-  const standardAnswers = Array.isArray(rec.standardAnswers)
-    ? rec.standardAnswers.map((item) => String(item ?? ''))
-    : [];
-  const userAnswers = Array.isArray(rec.userAnswers)
-    ? rec.userAnswers.map((item) => String(item ?? ''))
-    : [];
-  if (!questions.length && rec.score === undefined) {
-    return null;
-  }
-  const score = rec.score === undefined ? undefined : Number(rec.score);
-  const matchScore = rec.matchScore === undefined ? undefined : Number(rec.matchScore);
-  return {
-    questions,
-    standardAnswers,
-    userAnswers,
-    score: Number.isFinite(score) ? score : undefined,
-    matchScore: Number.isFinite(matchScore) ? matchScore : undefined,
-    optimizationPoints: rec.optimizationPoints == null ? undefined : String(rec.optimizationPoints),
-    savedAt: typeof rec.savedAt === 'string' ? rec.savedAt : undefined,
-    voice: typeof rec.voice === 'string' ? rec.voice : undefined,
-  };
-}
+export type QaItem = QaTurn & {
+  proficiency: Proficiency;
+};
+
+export type QaBank = {
+  id: string;
+  jobId: string;
+  title: string;
+  items: QaItem[];
+};
 
 export type Job = {
   id: string;
@@ -161,9 +133,12 @@ export type Job = {
   rawJD: string;
   structured: StructuredJD | null;
   jdDigest: JdDigest | null;
-  interviewQA: QAItem[];
   projectAssist: ProjectAssist | null;
-  interviewResult: InterviewResult | null;
+  interviewStatus: InterviewStatus;
+  bankId: string;
+  sessionKind: SessionKind;
+  session: QaTurn[];
+  sessionIndex: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -285,37 +260,74 @@ export function flattenSections(value: unknown): SectionItem[] {
 
 export const emptySection = (): SectionItem => ({ title: '', content: '' });
 
-export function newQaId(): string {
-  return `qa_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+export function newId(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function emptyQAItem(input: Partial<QAItem> = {}): QAItem {
+export function emptyQaTurn(question = ''): QaTurn {
   return {
-    id: input.id?.trim() || newQaId(),
-    question: input.question ?? '',
-    answer: input.answer ?? '',
-    source: input.source ?? 'manual',
-    polishedAnswer: input.polishedAnswer ?? '',
-    polishTips: input.polishTips ?? '',
+    id: newId('qa'),
+    question,
+    audio: '',
+    audioText: '',
+    answer: '',
   };
 }
 
-export function hydrateQAItem(value: unknown, index = 0): QAItem {
-  const rec = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const rawId = typeof rec.id === 'string' ? rec.id.trim() : '';
-  const question = String(rec.question ?? '');
-  return emptyQAItem({
-    id: rawId || `qa_legacy_${index}_${qaQuestionKey(question) || 'blank'}`,
-    question,
-    answer: String(rec.answer ?? ''),
-    source: rec.source === 'manual' ? 'manual' : 'ai',
-    polishedAnswer: String(rec.polishedAnswer ?? ''),
-    polishTips: String(rec.polishTips ?? ''),
-  });
+export function parseProficiency(value: unknown): Proficiency {
+  return value === 1 || value === 2 ? value : 3;
 }
 
-export function hydrateQAItems(value: unknown): QAItem[] {
-  return Array.isArray(value) ? value.map((item, index) => hydrateQAItem(item, index)) : [];
+export function nextProficiency(value: Proficiency): Proficiency {
+  return value === 1 ? 2 : value === 2 ? 3 : 1;
+}
+
+export function audioMatches(item: Pick<QaTurn, 'audio' | 'audioText' | 'question'>): boolean {
+  return Boolean(item.audio) && item.audioText === item.question;
+}
+
+export function hydrateQaTurn(value: unknown): QaTurn | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const rec = value as Record<string, unknown>;
+  const question = String(rec.question ?? '').trim();
+  const id = String(rec.id ?? '').trim();
+  if (!id && !question) {
+    return null;
+  }
+  return {
+    id: id || newId('qa'),
+    question,
+    audio: String(rec.audio ?? '').trim(),
+    audioText: String(rec.audioText ?? ''),
+    answer: String(rec.answer ?? ''),
+  };
+}
+
+export function hydrateQaItem(value: unknown): QaItem | null {
+  const turn = hydrateQaTurn(value);
+  if (!turn) {
+    return null;
+  }
+  const rec = value as Record<string, unknown>;
+  return { ...turn, proficiency: parseProficiency(rec.proficiency) };
+}
+
+export function hydrateQaTurns(value: unknown): QaTurn[] {
+  return Array.isArray(value)
+    ? value.map(hydrateQaTurn).filter((item): item is QaTurn => Boolean(item))
+    : [];
+}
+
+export function hydrateQaItems(value: unknown): QaItem[] {
+  return Array.isArray(value)
+    ? value.map(hydrateQaItem).filter((item): item is QaItem => Boolean(item))
+    : [];
+}
+
+export function parseInterviewStatus(value: unknown): InterviewStatus {
+  return value === 'generating' || value === 'active' ? value : 'idle';
 }
 
 export function hydrateProjectAssist(value: unknown): ProjectAssist | null {
@@ -330,14 +342,6 @@ export function hydrateProjectAssist(value: unknown): ProjectAssist | null {
     return null;
   }
   return { original, optimized, points };
-}
-
-export function qaQuestionKey(question: string): string {
-  return question.trim().replace(/\s+/g, ' ');
-}
-
-export function hasSavedInterview(job: Job): boolean {
-  return Boolean(job.interviewResult?.questions.some((item) => item.trim()));
 }
 
 export function userLabel(user: Pick<UserRecord, 'username' | 'nickname'>): string {

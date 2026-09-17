@@ -6,8 +6,9 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { useAuth } from '../auth/AuthContext';
 import { AiConnectScreen } from '../screens/AiConnectScreen';
+import { InterviewBankScreen } from '../screens/InterviewBankScreen';
 import { InterviewPickScreen } from '../screens/InterviewPickScreen';
-import { InterviewReviewScreen } from '../screens/InterviewReviewScreen';
+import { InterviewSaveScreen } from '../screens/InterviewSaveScreen';
 import { InterviewSessionScreen } from '../screens/InterviewSessionScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { JobNewScreen } from '../screens/JobNewScreen';
@@ -150,12 +151,17 @@ export function RootNavigator() {
             <Stack.Screen
               name="InterviewSession"
               component={InterviewSessionScreen}
-              options={{ title: '面试问答' }}
+              options={{ title: '面试' }}
             />
             <Stack.Screen
-              name="InterviewReview"
-              component={InterviewReviewScreen}
-              options={{ title: '面试记录' }}
+              name="InterviewSave"
+              component={InterviewSaveScreen}
+              options={{ title: '保存问答' }}
+            />
+            <Stack.Screen
+              name="InterviewBank"
+              component={InterviewBankScreen}
+              options={{ title: '面试问答' }}
             />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: '设置' }} />
             <Stack.Screen name="AiConnect" component={AiConnectScreen} options={{ title: '连接大模型' }} />

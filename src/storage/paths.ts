@@ -30,6 +30,22 @@ export function jobPath(hashid: string, jobId: string): string {
   return `datas/${hashid}/jobs/${jobId}.json`;
 }
 
+export function banksDirPath(hashid: string): string {
+  return `datas/${hashid}/banks`;
+}
+
+export function bankPath(hashid: string, bankId: string): string {
+  return `datas/${hashid}/banks/${bankId}.json`;
+}
+
+export function audioDirPath(hashid: string): string {
+  return `datas/${hashid}/audio`;
+}
+
+export function audioPath(hashid: string, id: string): string {
+  return `datas/${hashid}/audio/${id}.mp3`;
+}
+
 export function nowIso(): string {
   return new Date().toISOString();
 }

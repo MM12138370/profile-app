@@ -78,6 +78,10 @@ export function JobStructuredScreen() {
         return;
       }
       const loaded = loadJob(user.hashid, jobId);
+      if (!loaded) {
+        Alert.alert('岗位已不存在', '', [{ text: '好', onPress: () => navigation.goBack() }]);
+        return;
+      }
       if (!loaded.structured) {
         Alert.alert('还没有结构化结果', '请先对该岗位做 JD 结构化。', [
           { text: '好', onPress: () => navigation.goBack() },

@@ -5,21 +5,30 @@ import {
   emptyMaster,
   emptyResume,
   flattenSections,
-  hydrateInterviewResult,
   hydrateJdDigest,
   hydrateProjectAssist,
-  hydrateQAItems,
+  hydrateQaItems,
+  hydrateQaTurns,
+  jobListTitle,
   masterHasContent,
+  newId,
   normalizeStructuredJd,
+  parseInterviewStatus,
   type AiSettings,
   type Job,
   type MasterTemplate,
   type Profile,
+  type QaBank,
   type Resume,
   type StructuredJD,
   type UserRecord,
 } from '../types';
 import {
+  audioDirPath,
+  audioPath,
+  audioPlayUri,
+  bankPath,
+  banksDirPath,
   datasPath,
   deleteFile,
   ensureDir,
@@ -117,6 +126,8 @@ export function ensureUserWorkspace(hashid: string): void {
   ensureDir(userDirPath(hashid));
   ensureDir(jobsDirPath(hashid));
   ensureDir(resumesDirPath(hashid));
+  ensureDir(banksDirPath(hashid));
+  ensureDir(audioDirPath(hashid));
 }
 
 export async function restoreSession(): Promise<UserRecord | null> {
@@ -234,12 +245,6 @@ export function loadComposedProfile(hashid: string, resumeId: string): Profile {
   return composeProfile(loadMaster(hashid), loadResume(hashid, resumeId));
 }
 
-export function loadProfileForJob(hashid: string, job: Job): Profile {
-  return job.resumeId && resumeExists(hashid, job.resumeId)
-    ? loadComposedProfile(hashid, job.resumeId)
-    : composeProfile(loadMaster(hashid), emptyResume(''));
-}
-
 export function listJobs(hashid: string): Job[] {
   ensureUserWorkspace(hashid);
   const dir = jobsDirPath(hashid);
@@ -252,17 +257,32 @@ export function listJobs(hashid: string): Job[] {
       continue;
     }
     const id = name.replace(/\.json$/, '');
-    try {
-      jobs.push(hydrateJob(readJsonFile<Job>(jobPath(hashid, id), emptyJob(id))));
-    } catch {
-      // skip unreadable job files
+    const job = loadJob(hashid, id);
+    if (job) {
+      jobs.push(job);
     }
   }
   return jobs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export function loadJob(hashid: string, jobId: string): Job {
-  return hydrateJob(readJsonFile<Job>(jobPath(hashid, jobId), emptyJob(jobId)));
+export function jobExists(hashid: string, jobId: string): boolean {
+  return pathExists(jobPath(hashid, jobId));
+}
+
+export function loadJob(hashid: string, jobId: string): Job | null {
+  const rel = jobPath(hashid, jobId);
+  if (!pathExists(rel)) {
+    return null;
+  }
+  try {
+    const raw = readJsonFile<Partial<Job> | null>(rel, null);
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+    return hydrateJob({ ...emptyJob(jobId), ...raw, id: jobId });
+  } catch {
+    return null;
+  }
 }
 
 export function saveJob(hashid: string, job: Job): Job {
@@ -287,11 +307,20 @@ export function createJob(
   return job;
 }
 
-export function deleteJob(hashid: string, jobId: string): void {
+export function deleteJob(hashid: string, jobId: string, withBank = false): void {
+  const job = loadJob(hashid, jobId);
+  if (!job) {
+    return;
+  }
+  dropSessionAudio(hashid, job);
+  if (withBank && job.bankId) {
+    removeBankFile(hashid, job.bankId);
+  }
   deleteFile(jobPath(hashid, jobId));
 }
 
 function hydrateJob(job: Job): Job {
+  const session = hydrateQaTurns(job.session);
   return {
     id: job.id,
     resumeId: String(job.resumeId ?? ''),
@@ -299,15 +328,19 @@ function hydrateJob(job: Job): Job {
     rawJD: String(job.rawJD ?? ''),
     structured: job.structured ? normalizeStructuredJd(job.structured) : null,
     jdDigest: hydrateJdDigest(job.jdDigest),
-    interviewQA: hydrateQAItems(job.interviewQA),
     projectAssist: hydrateProjectAssist(job.projectAssist),
-    interviewResult: hydrateInterviewResult(job.interviewResult),
+    interviewStatus: parseInterviewStatus(job.interviewStatus),
+    bankId: String(job.bankId ?? ''),
+    sessionKind: job.sessionKind === 'review' ? 'review' : 'fresh',
+    session,
+    sessionIndex: Math.min(Math.max(0, Math.round(Number(job.sessionIndex) || 0)), session.length),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
   };
 }
 
 export function emptyJob(id: string): Job {
+  const now = nowIso();
   return {
     id,
     resumeId: '',
@@ -315,13 +348,112 @@ export function emptyJob(id: string): Job {
     rawJD: '',
     structured: null,
     jdDigest: null,
-    interviewQA: [],
     projectAssist: null,
-    interviewResult: null,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
+    interviewStatus: 'idle',
+    bankId: '',
+    sessionKind: 'fresh',
+    session: [],
+    sessionIndex: 0,
+    createdAt: now,
+    updatedAt: now,
   };
 }
+
+export function listBanks(hashid: string): QaBank[] {
+  ensureUserWorkspace(hashid);
+  const dir = banksDirPath(hashid);
+  if (!pathExists(dir)) {
+    return [];
+  }
+  const banks: QaBank[] = [];
+  for (const name of listFileNames(dir)) {
+    if (!name.endsWith('.json')) {
+      continue;
+    }
+    const bank = loadBank(hashid, name.replace(/\.json$/, ''));
+    if (bank?.items.length) {
+      banks.push(bank);
+    }
+  }
+  return banks;
+}
+
+export function loadBank(hashid: string, bankId: string): QaBank | null {
+  const rel = bankPath(hashid, bankId);
+  if (!pathExists(rel)) {
+    return null;
+  }
+  try {
+    const raw = readJsonFile<Partial<QaBank> | null>(rel, null);
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+    const id = String(raw.id ?? bankId);
+    return {
+      id,
+      jobId: String(raw.jobId ?? ''),
+      title: String(raw.title ?? '').trim() || '未命名岗位',
+      items: hydrateQaItems(raw.items),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveBank(hashid: string, bank: QaBank): QaBank {
+  ensureUserWorkspace(hashid);
+  writeJsonFile(bankPath(hashid, bank.id), bank);
+  return bank;
+}
+
+export function createBank(hashid: string, job: Job): QaBank {
+  const bank: QaBank = {
+    id: newId('bank'),
+    jobId: job.id,
+    title: jobListTitle(job),
+    items: [],
+  };
+  return saveBank(hashid, bank);
+}
+
+function removeBankFile(hashid: string, bankId: string): void {
+  const bank = loadBank(hashid, bankId);
+  if (!bank) {
+    return;
+  }
+  for (const item of bank.items) {
+    if (item.audio) {
+      deleteFile(item.audio);
+    }
+  }
+  deleteFile(bankPath(hashid, bankId));
+}
+
+export function deleteBank(hashid: string, bankId: string): void {
+  removeBankFile(hashid, bankId);
+  for (const job of listJobs(hashid)) {
+    if (job.bankId === bankId) {
+      saveJob(hashid, { ...job, bankId: '' });
+    }
+  }
+}
+
+export function dropSessionAudio(hashid: string, job: Job, keepIds?: Set<string>): void {
+  const bank = job.bankId ? loadBank(hashid, job.bankId) : null;
+  const keep = keepIds ?? new Set(bank?.items.map((item) => item.id) ?? []);
+  for (const turn of job.session) {
+    if (turn.audio && !keep.has(turn.id)) {
+      deleteFile(turn.audio);
+    }
+  }
+}
+
+export function prepareAudioRel(hashid: string, id: string): string {
+  ensureUserWorkspace(hashid);
+  return audioPath(hashid, id);
+}
+
+export { audioPlayUri };
 
 function hydrateAiSettings(raw: Partial<AiSettings>): AiSettings {
   const defaults = defaultAiSettings();

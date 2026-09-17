@@ -1,6 +1,10 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
 export {
+  audioDirPath,
+  audioPath,
+  bankPath,
+  banksDirPath,
   datasPath,
   jobPath,
   jobsDirPath,
@@ -46,6 +50,19 @@ export function writeJsonFile(rel: string, data: unknown): void {
     file.create();
   }
   file.write(`${JSON.stringify(data, null, 2)}\n`);
+}
+
+export function writeBytes(rel: string, bytes: Uint8Array): void {
+  const file = nativeFile(rel);
+  if (!file.exists) {
+    file.create();
+  }
+  file.write(bytes);
+}
+
+export function audioPlayUri(rel: string): string | null {
+  const file = nativeFile(rel);
+  return file.exists ? file.uri : null;
 }
 
 export function deleteFile(rel: string): void {

@@ -3,6 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { loadAiSettings } from '../storage';
+import { audioPlayUri, writeBytes } from '../storage/io';
 import { speechConfigured, type AiSettings } from '../types';
 import { audioBlobToWav } from './wav';
 
@@ -215,6 +216,7 @@ export async function synthesizeSpeech(
   text: string,
   voice?: string,
   settingsOverride?: AiSettings,
+  destRel?: string,
 ): Promise<string> {
   const settings = settingsOverride ?? (await loadAiSettings());
   requireSpeech(settings);
@@ -256,7 +258,12 @@ export async function synthesizeSpeech(
     const status = headerStatus(response);
     throw new Error(errorMessage || (raw.slice(0, 180) || `语音合成失败${status ? ` ${status}` : ''}`));
   }
-  return writeAudioFile(concatBytes(audio), 'mp3');
+  const bytes = concatBytes(audio);
+  if (destRel) {
+    writeBytes(destRel, bytes);
+    return audioPlayUri(destRel) ?? writeAudioFile(bytes, 'mp3');
+  }
+  return writeAudioFile(bytes, 'mp3');
 }
 
 function audioFormat(uri: string): string {

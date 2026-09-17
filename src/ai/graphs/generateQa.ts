@@ -6,28 +6,32 @@ import { extractJson, GROUNDING_RULE } from '../json';
 import { complete } from '../llm';
 import { profileToPrompt } from '../profileText';
 
-/** 一次面试生成的固定题量。 */
-export const QA_QUESTION_COUNT = 10;
-
 const State = Annotation.Root({
   jd: Annotation<StructuredJD>,
-  profile: Annotation<Profile>,
+  profile: Annotation<Profile | null>,
   avoid: Annotation<string[]>,
   count: Annotation<number>,
+  focus: Annotation<string>,
   questions: Annotation<string[]>,
 });
 
 type StateType = {
   jd: StructuredJD;
-  profile: Profile;
+  profile: Profile | null;
   avoid: string[];
   count: number;
+  focus: string;
   questions: string[];
 };
 
 async function draft(state: StateType) {
   const avoided = state.avoid.map((item) => item.trim()).filter(Boolean);
   const count = Math.max(1, Math.round(state.count));
+  const focus = state.focus.trim();
+  const resume = state.profile
+    ? `候选人简历：
+${profileToPrompt(state.profile)}`
+    : '未选择简历，只根据岗位出题。';
   const content = await complete([
     {
       role: 'system',
@@ -40,10 +44,10 @@ async function draft(state: StateType) {
       content: `岗位：
 ${jdToPrompt(state.jd)}
 
-候选人简历：
-${profileToPrompt(state.profile)}
+${resume}
 
 ${avoided.length ? `以下问题已准备，请勿重复：\n${avoided.map((item) => `- ${item}`).join('\n')}\n` : ''}
+${focus ? `出题倾向：${focus}\n` : ''}
 请正好生成 ${count} 道面试题，不多不少，输出：
 { "questions": ["...", "..."] }
 
@@ -71,16 +75,24 @@ const graph = new StateGraph(State)
   .addEdge('draft', END)
   .compile();
 
-export async function runGenerateQa(
-  jd: StructuredJD,
-  profile: Profile,
-  avoid: string[] = [],
-  count: number = QA_QUESTION_COUNT,
-): Promise<string[]> {
-  const target = Math.max(1, Math.round(count));
-  const result = await graph.invoke({ jd, profile, avoid, count: target, questions: [] });
+export async function runGenerateQa(input: {
+  jd: StructuredJD;
+  profile?: Profile | null;
+  avoid?: string[];
+  count?: number;
+  focus?: string;
+}): Promise<string[]> {
+  const count = Math.max(1, Math.round(input.count ?? 5));
+  const result = await graph.invoke({
+    jd: input.jd,
+    profile: input.profile ?? null,
+    avoid: input.avoid ?? [],
+    count,
+    focus: input.focus ?? '',
+    questions: [],
+  });
   if (!result.questions.length) {
-    throw new Error('没有生成可用的问题，请完善简历后重试');
+    throw new Error('没有生成可用的问题，请完善岗位或简历后重试');
   }
-  return result.questions.slice(0, target);
+  return result.questions.slice(0, count);
 }
