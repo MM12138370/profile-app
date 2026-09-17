@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
 import { RESUME_FIELDS } from '../resumeFields';
-import { loadMaster, loadResume, persistResume } from '../storage';
+import { createResume, loadMaster, loadResume, saveResume } from '../storage';
 import { colors, radius, space } from '../theme';
 import {
   emptyResume,
@@ -68,7 +68,16 @@ export function ProfileScreen() {
     if (!user || !resumeRef.current) {
       return;
     }
-    const saved = persistResume(user.hashid, resumeRef.current);
+    const current = resumeRef.current;
+    const saved = current.id
+      ? saveResume(user.hashid, current)
+      : createResume(user.hashid, {
+          title: current.title,
+          jobIntention: current.jobIntention,
+          yearsOfWork: current.yearsOfWork,
+          intendedCities: current.intendedCities,
+          sections: current.sections,
+        });
     resumeRef.current = saved;
     initialRef.current = JSON.stringify(saved);
     setResume(saved);

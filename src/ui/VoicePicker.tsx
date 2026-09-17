@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { TTS_VOICES, voiceGroups, voicesInGroup, type VoiceGroupId } from '../ai/voices';
+import { voiceGroups, voiceLabel, voicesInGroup, type VoiceGroupId } from '../ai/voices';
 import { colors, radius, space } from '../theme';
 import { Button } from './Button';
 import { CenterSheet } from './CenterSheet';
@@ -79,7 +79,7 @@ export function VoiceField({
   voiceId: string;
   onPress: () => void;
 }) {
-  const name = TTS_VOICES.find((item) => item.id === voiceId)?.name ?? voiceId;
+  const name = voiceId ? voiceLabel(voiceId) : '';
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.field, pressed && styles.pressed]}>
       <Text style={styles.fieldLabel}>{label}</Text>

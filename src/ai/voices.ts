@@ -57,28 +57,13 @@ export const TTS_VOICES: TtsVoice[] = [
   { id: 'ICL_uranus_zh_female_lixingyuanzi_tob', name: '理性圆子 2.0', group: 'service' },
 ];
 
-const uniqueVoices = (() => {
-  const seen = new Set<string>();
-  return TTS_VOICES.filter((voice) => {
-    if (seen.has(voice.id)) {
-      return false;
-    }
-    seen.add(voice.id);
-    return true;
-  });
-})();
-
 export function voicesInGroup(group: VoiceGroupId): TtsVoice[] {
   if (group === 'recommend') {
-    return uniqueVoices.filter((voice) => voice.recommend);
+    return TTS_VOICES.filter((voice) => voice.recommend);
   }
-  return uniqueVoices.filter((voice) => voice.group === group);
-}
-
-export function voiceById(id: string): TtsVoice | undefined {
-  return uniqueVoices.find((voice) => voice.id === id);
+  return TTS_VOICES.filter((voice) => voice.group === group);
 }
 
 export function voiceLabel(id: string): string {
-  return voiceById(id)?.name || id || '未选择音色';
+  return TTS_VOICES.find((voice) => voice.id === id)?.name || id || '未选择音色';
 }

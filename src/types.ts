@@ -41,8 +41,6 @@ export type SectionItem = {
   content: string;
 };
 
-export type SectionNode = SectionItem | SectionNode[];
-
 export type StructuredJD = {
   jobTitle: string;
   yearsRequired: string;
@@ -104,7 +102,6 @@ export type ProjectAssist = {
 };
 
 export type InterviewStatus = 'idle' | 'generating' | 'active';
-export type SessionKind = 'fresh' | 'review';
 export type Proficiency = 1 | 2 | 3;
 
 export type QaTurn = {
@@ -134,9 +131,7 @@ export type Job = {
   structured: StructuredJD | null;
   jdDigest: JdDigest | null;
   projectAssist: ProjectAssist | null;
-  interviewStatus: InterviewStatus;
   bankId: string;
-  sessionKind: SessionKind;
   session: QaTurn[];
   sessionIndex: number;
   createdAt: string;
@@ -224,35 +219,18 @@ export function resumeLabel(resume: Resume): string {
   return resume.title.trim() || resume.jobIntention.trim() || '未命名简历';
 }
 
-export function isSectionItem(node: SectionNode): node is SectionItem {
-  return !Array.isArray(node);
-}
-
-export function isSectionNode(value: unknown): value is SectionNode {
-  if (Array.isArray(value)) {
-    return value.every(isSectionNode);
-  }
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-  const rec = value as Record<string, unknown>;
-  return typeof rec.title === 'string' && typeof rec.content === 'string';
-}
-
-/** 旧存档里的嵌套分组摊成条目，编辑页只维护扁平列表。 */
-export function flattenSections(value: unknown): SectionItem[] {
+export function readSections(value: unknown): SectionItem[] {
   if (!Array.isArray(value)) {
     return [];
   }
   const out: SectionItem[] = [];
-  for (const node of value) {
-    if (!isSectionNode(node)) {
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
       continue;
     }
-    if (isSectionItem(node)) {
-      out.push({ title: node.title, content: node.content });
-    } else {
-      out.push(...flattenSections(node));
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.title === 'string' && typeof rec.content === 'string') {
+      out.push({ title: rec.title, content: rec.content });
     }
   }
   return out;
@@ -280,10 +258,6 @@ export function parseProficiency(value: unknown): Proficiency {
 
 export function nextProficiency(value: Proficiency): Proficiency {
   return value === 1 ? 2 : value === 2 ? 3 : 1;
-}
-
-export function audioMatches(item: Pick<QaTurn, 'audio' | 'audioText' | 'question'>): boolean {
-  return Boolean(item.audio) && item.audioText === item.question;
 }
 
 export function hydrateQaTurn(value: unknown): QaTurn | null {
@@ -324,10 +298,6 @@ export function hydrateQaItems(value: unknown): QaItem[] {
   return Array.isArray(value)
     ? value.map(hydrateQaItem).filter((item): item is QaItem => Boolean(item))
     : [];
-}
-
-export function parseInterviewStatus(value: unknown): InterviewStatus {
-  return value === 'generating' || value === 'active' ? value : 'idle';
 }
 
 export function hydrateProjectAssist(value: unknown): ProjectAssist | null {

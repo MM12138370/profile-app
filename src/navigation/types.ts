@@ -10,6 +10,7 @@ export type RootStackParamList = {
   JobStructured: { jobId: string };
   ProjectMatch: { jobId: string };
   InterviewSession: { jobId: string };
+  InterviewReview: { bankId: string; itemIds: string[] };
   InterviewSave: { jobId: string };
   InterviewBank: { bankId: string };
   Settings: undefined;

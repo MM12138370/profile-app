@@ -4,7 +4,7 @@ import {
   composeProfile,
   emptyMaster,
   emptyResume,
-  flattenSections,
+  readSections,
   hydrateJdDigest,
   hydrateProjectAssist,
   hydrateQaItems,
@@ -13,12 +13,12 @@ import {
   masterHasContent,
   newId,
   normalizeStructuredJd,
-  parseInterviewStatus,
   type AiSettings,
   type Job,
   type MasterTemplate,
   type Profile,
   type QaBank,
+  type QaTurn,
   type Resume,
   type StructuredJD,
   type UserRecord,
@@ -168,7 +168,7 @@ export function saveMaster(hashid: string, master: MasterTemplate): void {
 function hydrateResume(resume: Resume): Resume {
   return {
     ...resume,
-    sections: flattenSections(resume.sections),
+    sections: readSections(resume.sections),
   };
 }
 
@@ -217,19 +217,6 @@ export function createResume(
   });
   writeJsonFile(resumePath(hashid, id), resume);
   return resume;
-}
-
-export function persistResume(hashid: string, resume: Resume): Resume {
-  if (!resume.id) {
-    return createResume(hashid, {
-      title: resume.title,
-      jobIntention: resume.jobIntention,
-      yearsOfWork: resume.yearsOfWork,
-      intendedCities: resume.intendedCities,
-      sections: resume.sections,
-    });
-  }
-  return saveResume(hashid, resume);
 }
 
 export function deleteResume(hashid: string, resumeId: string): void {
@@ -329,9 +316,7 @@ function hydrateJob(job: Job): Job {
     structured: job.structured ? normalizeStructuredJd(job.structured) : null,
     jdDigest: hydrateJdDigest(job.jdDigest),
     projectAssist: hydrateProjectAssist(job.projectAssist),
-    interviewStatus: parseInterviewStatus(job.interviewStatus),
     bankId: String(job.bankId ?? ''),
-    sessionKind: job.sessionKind === 'review' ? 'review' : 'fresh',
     session,
     sessionIndex: Math.min(Math.max(0, Math.round(Number(job.sessionIndex) || 0)), session.length),
     createdAt: job.createdAt,
@@ -349,9 +334,7 @@ export function emptyJob(id: string): Job {
     structured: null,
     jdDigest: null,
     projectAssist: null,
-    interviewStatus: 'idle',
     bankId: '',
-    sessionKind: 'fresh',
     session: [],
     sessionIndex: 0,
     createdAt: now,
@@ -453,7 +436,12 @@ export function prepareAudioRel(hashid: string, id: string): string {
   return audioPath(hashid, id);
 }
 
-export { audioPlayUri };
+export function archivedAudioUri(item: Pick<QaTurn, 'audio' | 'audioText' | 'question'>): string | null {
+  if (!item.audio || item.audioText.trim() !== item.question.trim()) {
+    return null;
+  }
+  return audioPlayUri(item.audio);
+}
 
 function hydrateAiSettings(raw: Partial<AiSettings>): AiSettings {
   const defaults = defaultAiSettings();

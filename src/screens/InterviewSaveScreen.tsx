@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { runDedupeQa } from '../ai';
 import { useAuth } from '../auth/AuthContext';
-import { commitSession, viewStatus } from '../interview';
+import { interviewStatus } from '../edit/interview';
+import { commitSession } from '../runtime/interview';
 import type { RootStackParamList } from '../navigation/types';
 import { loadBank, loadJob } from '../storage';
 import { colors, radius, space } from '../theme';
@@ -34,7 +35,7 @@ export function InterviewSaveScreen() {
       return;
     }
     const loaded = loadJob(user.hashid, jobId);
-    if (!loaded || viewStatus(loaded) !== 'active') {
+    if (!loaded || interviewStatus(loaded) !== 'active') {
       Alert.alert('没有可保存的面试', '', [{ text: '好', onPress: () => navigation.goBack() }]);
       return;
     }
@@ -45,6 +46,26 @@ export function InterviewSaveScreen() {
   useEffect(() => {
     boot();
   }, [boot]);
+
+  const allOn = Boolean(job && picked.size === job.session.length);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () =>
+        job ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={allOn ? '全不选' : '全选'}
+            hitSlop={8}
+            onPress={() =>
+              setPicked(allOn ? new Set() : new Set(job.session.map((item) => item.id)))
+            }
+          >
+            <Text style={styles.toggle}>{allOn ? '全不选' : '全选'}</Text>
+          </Pressable>
+        ) : null,
+    });
+  }, [allOn, job, navigation]);
 
   function toggle(id: string) {
     setPicked((prev) => {
@@ -161,4 +182,5 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
   },
   half: { flex: 1 },
+  toggle: { color: colors.accent, fontWeight: '700' },
 });

@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { runAnalyzeJob } from '../ai';
 import { useAuth } from '../auth/AuthContext';
-import { generateInterview, viewStatus } from '../interview';
+import { generateInterview, interviewStatus } from '../edit/interview';
 import type { RootStackParamList } from '../navigation/types';
 import { listResumes, loadJob, saveJob } from '../storage';
 import { colors, radius, space } from '../theme';
@@ -163,7 +163,7 @@ export function JobDetailScreen() {
       return;
     }
     setSheetOpen(false);
-    setBusy('正在生成面试…');
+    setBusy('正在生成面试与语音…');
     try {
       await generateInterview(
         user.hashid,
@@ -184,7 +184,7 @@ export function JobDetailScreen() {
 
   const title = jobListTitle(job);
   const meta = jobMetaLine(job) || '还没有结构化';
-  const status = viewStatus(job);
+  const status = interviewStatus(job);
   const selectedResume = resumes.find((item) => item.id === resumeId);
 
   return (

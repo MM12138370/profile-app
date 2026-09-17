@@ -8,6 +8,7 @@ import { useAuth } from '../auth/AuthContext';
 import { AiConnectScreen } from '../screens/AiConnectScreen';
 import { InterviewBankScreen } from '../screens/InterviewBankScreen';
 import { InterviewPickScreen } from '../screens/InterviewPickScreen';
+import { InterviewReviewScreen } from '../screens/InterviewReviewScreen';
 import { InterviewSaveScreen } from '../screens/InterviewSaveScreen';
 import { InterviewSessionScreen } from '../screens/InterviewSessionScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
@@ -152,6 +153,11 @@ export function RootNavigator() {
               name="InterviewSession"
               component={InterviewSessionScreen}
               options={{ title: '面试' }}
+            />
+            <Stack.Screen
+              name="InterviewReview"
+              component={InterviewReviewScreen}
+              options={{ title: '模拟复盘' }}
             />
             <Stack.Screen
               name="InterviewSave"
